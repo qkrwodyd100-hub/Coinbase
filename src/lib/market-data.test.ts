@@ -17,15 +17,24 @@ function installMarketFetch(overrides: Overrides = {}) {
 
       if (url.includes('alternative.me')) {
         payload = { data: [{ value: overrides.fearGreed ?? '40' }] };
-      } else if (url.includes('/ticker/price')) {
+      } else if (url.includes('api.kraken.com') && url.includes('/Ticker')) {
+        const isBtc = url.includes('XBTUSD');
+        payload = { error: [], result: { TEST: { c: [isBtc ? (overrides.btcPrice ?? '65000') : '3200'] } } };
+      } else if (url.includes('api.kraken.com') && url.includes('/OHLC')) {
+        const isBtc = url.includes('XBTUSD');
+        payload = {
+          error: [],
+          result: {
+            TEST: Array.from({ length: 80 }, (_, index) => [0, 0, 0, 0, isBtc && index === 40 ? (overrides.btcClose ?? String(60000 + index)) : String(3000 + index)]),
+            last: 123,
+          },
+        };
+      } else if (url.includes('api.bybit.com') && url.includes('/tickers')) {
         const isBtc = url.includes('BTCUSDT');
-        payload = { price: isBtc ? (overrides.btcPrice ?? '65000') : '3200' };
-      } else if (url.includes('/klines')) {
-        const isBtc = url.includes('BTCUSDT');
-        payload = Array.from({ length: 80 }, (_, index) => [0, 0, 0, 0, isBtc && index === 40 ? (overrides.btcClose ?? String(60000 + index)) : String(3000 + index)]);
-      } else if (url.includes('/premiumIndex')) {
-        const isBtc = url.includes('BTCUSDT');
-        payload = { lastFundingRate: isBtc ? (overrides.btcFunding ?? '0.0001') : '0.0001' };
+        payload = {
+          retCode: 0,
+          result: { list: [{ fundingRate: isBtc ? (overrides.btcFunding ?? '0.0001') : '0.0001' }] },
+        };
       } else {
         throw new Error(`Unexpected test URL: ${url}`);
       }
@@ -49,12 +58,13 @@ describe('market payload validation', () => {
     await expect(getDashboardPayload()).rejects.toThrow(message);
   });
 
-  it('builds both asset signals from valid no-key public payloads', async () => {
+  it('builds both asset signals from Vercel-safe no-key public payloads', async () => {
     installMarketFetch();
 
     const payload = await getDashboardPayload();
 
     expect(payload.assets.map((asset) => asset.symbol)).toEqual(['BTC', 'ETH']);
     expect(payload.assets.every((asset) => asset.overallScore >= 0 && asset.overallScore <= 100)).toBe(true);
+    expect(vi.mocked(fetch).mock.calls.map(([input]) => String(input))).not.toContainEqual(expect.stringContaining('binance.com'));
   });
 });

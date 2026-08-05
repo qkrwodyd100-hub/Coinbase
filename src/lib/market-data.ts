@@ -3,16 +3,17 @@ import { buildAssetSignal, type AssetSignal, type DashboardPayload } from './sig
 type AssetConfig = {
   symbol: 'BTC' | 'ETH';
   name: string;
-  spotSymbol: 'BTCUSDT' | 'ETHUSDT';
+  krakenPair: 'XBTUSD' | 'ETHUSD';
+  fundingSymbol: 'BTCUSDT' | 'ETHUSDT';
 };
 
 const ASSETS: AssetConfig[] = [
-  { symbol: 'BTC', name: 'Bitcoin', spotSymbol: 'BTCUSDT' },
-  { symbol: 'ETH', name: 'Ethereum', spotSymbol: 'ETHUSDT' },
+  { symbol: 'BTC', name: 'Bitcoin', krakenPair: 'XBTUSD', fundingSymbol: 'BTCUSDT' },
+  { symbol: 'ETH', name: 'Ethereum', krakenPair: 'ETHUSD', fundingSymbol: 'ETHUSDT' },
 ];
 
-const BINANCE_BASE = 'https://api.binance.com';
-const BINANCE_FUTURES_BASE = 'https://fapi.binance.com';
+const KRAKEN_BASE = 'https://api.kraken.com/0/public';
+const BYBIT_BASE = 'https://api.bybit.com/v5/market';
 const FEAR_GREED_URL = 'https://api.alternative.me/fng/?limit=1&format=json';
 const REQUEST_TIMEOUT_MS = 8_000;
 const REVALIDATE_SECONDS = 55;
@@ -29,9 +30,9 @@ export async function getDashboardPayload(): Promise<DashboardPayload> {
 
 async function getAssetSignal(asset: AssetConfig, fearGreed: number): Promise<AssetSignal> {
   const [price, closes, fundingPercent] = await Promise.all([
-    getTickerPrice(asset.spotSymbol),
-    getDailyCloses(asset.spotSymbol),
-    getFundingPercent(asset.spotSymbol),
+    getTickerPrice(asset.krakenPair),
+    getDailyCloses(asset.krakenPair),
+    getFundingPercent(asset.fundingSymbol),
   ]);
 
   return buildAssetSignal({
@@ -45,21 +46,21 @@ async function getAssetSignal(asset: AssetConfig, fearGreed: number): Promise<As
 }
 
 async function getTickerPrice(symbol: string): Promise<number> {
-  const payload = await fetchJson(`${BINANCE_BASE}/api/v3/ticker/price?symbol=${symbol}`);
-  if (!isRecord(payload) || typeof payload.price !== 'string') {
+  const ticker = getKrakenResultEntry(await fetchJson(`${KRAKEN_BASE}/Ticker?pair=${symbol}`), symbol);
+  if (!isRecord(ticker) || !Array.isArray(ticker.c) || typeof ticker.c[0] !== 'string') {
     throw new Error(`Unexpected ticker payload for ${symbol}`);
   }
 
-  return parsePositiveFiniteNumber(payload.price, `${symbol} price`);
+  return parsePositiveFiniteNumber(ticker.c[0], `${symbol} price`);
 }
 
 async function getDailyCloses(symbol: string): Promise<number[]> {
-  const payload = await fetchJson(`${BINANCE_BASE}/api/v3/klines?symbol=${symbol}&interval=1d&limit=80`);
-  if (!Array.isArray(payload)) {
+  const candles = getKrakenResultEntry(await fetchJson(`${KRAKEN_BASE}/OHLC?pair=${symbol}&interval=1440`), symbol);
+  if (!Array.isArray(candles)) {
     throw new Error(`Unexpected kline payload for ${symbol}`);
   }
 
-  const closes = payload.map((entry, index) => {
+  const closes = candles.slice(-80).map((entry, index) => {
     if (!Array.isArray(entry) || typeof entry[4] !== 'string') {
       throw new Error(`Unexpected kline close at ${symbol}[${index}]`);
     }
@@ -74,12 +75,15 @@ async function getDailyCloses(symbol: string): Promise<number[]> {
 }
 
 async function getFundingPercent(symbol: string): Promise<number> {
-  const payload = await fetchJson(`${BINANCE_FUTURES_BASE}/fapi/v1/premiumIndex?symbol=${symbol}`);
-  if (!isRecord(payload) || typeof payload.lastFundingRate !== 'string') {
+  const payload = await fetchJson(`${BYBIT_BASE}/tickers?category=linear&symbol=${symbol}`);
+  const ticker = isRecord(payload) && isRecord(payload.result) && Array.isArray(payload.result.list)
+    ? payload.result.list[0]
+    : undefined;
+  if (!isRecord(payload) || payload.retCode !== 0 || !isRecord(ticker) || typeof ticker.fundingRate !== 'string') {
     throw new Error(`Unexpected funding payload for ${symbol}`);
   }
 
-  return parseBoundedFiniteNumber(payload.lastFundingRate, `${symbol} funding`, -1, 1) * 100;
+  return parseBoundedFiniteNumber(ticker.fundingRate, `${symbol} funding`, -1, 1) * 100;
 }
 
 async function getFearGreedIndex(): Promise<number> {
@@ -118,6 +122,14 @@ async function fetchJson(url: string): Promise<unknown> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function getKrakenResultEntry(payload: unknown, symbol: string): unknown {
+  if (!isRecord(payload) || !Array.isArray(payload.error) || payload.error.length > 0 || !isRecord(payload.result)) {
+    throw new Error(`Unexpected Kraken payload for ${symbol}`);
+  }
+
+  return Object.entries(payload.result).find(([key]) => key !== 'last')?.[1];
 }
 
 function parseFiniteNumber(value: string, label: string): number {
