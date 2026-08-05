@@ -161,7 +161,7 @@ function DashboardContent({
             <h2 className="mt-1 text-3xl font-black tracking-tight sm:text-4xl">{selectedAsset.name} Signal</h2>
             {stale ? <p className="mt-2 text-sm font-semibold text-amber-200">Stale data: showing cached snapshot after refresh failure.</p> : null}
           </div>
-          <ScoreGauge score={selectedAsset.overallScore} tone={selectedAsset.signal.tone} label={selectedAsset.signal.label} />
+          <ScoreGauge assetName={selectedAsset.name} score={selectedAsset.overallScore} tone={selectedAsset.signal.tone} label={selectedAsset.signal.label} />
         </div>
 
         <div className="mt-7 grid gap-4 sm:grid-cols-2">
@@ -188,12 +188,19 @@ function DashboardContent({
   );
 }
 
-function ScoreGauge({ score, tone, label }: { score: number; tone: SignalTone; label: string }) {
+function ScoreGauge({ assetName, score, tone, label }: { assetName: string; score: number; tone: SignalTone; label: string }) {
   const strokeClass = tone === 'positive' ? 'stroke-emerald-300' : tone === 'neutral' ? 'stroke-amber-300' : 'stroke-rose-300';
   const dash = `${score}, 100`;
 
   return (
-    <div className="flex items-center gap-4 rounded-3xl border border-white/10 bg-black/20 p-4">
+    <div
+      role="meter"
+      aria-label={`${assetName} signal score`}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={score}
+      className="flex items-center gap-4 rounded-3xl border border-white/10 bg-black/20 p-4"
+    >
       <svg viewBox="0 0 42 42" className="h-28 w-28 rotate-[-90deg]" aria-hidden="true">
         <circle cx="21" cy="21" r="15.9155" fill="transparent" stroke="rgba(255,255,255,0.12)" strokeWidth="4" />
         <circle
@@ -234,7 +241,7 @@ function barClass(tone: SignalTone): string {
 
 function DashboardSkeleton() {
   return (
-    <div className="grid flex-1 gap-5 lg:grid-cols-[360px_minmax(0,1fr)]" aria-label="Loading dashboard">
+    <div role="status" className="grid flex-1 gap-5 lg:grid-cols-[360px_minmax(0,1fr)]" aria-label="Loading dashboard">
       <div className="space-y-3">
         <div className="h-36 animate-pulse rounded-3xl bg-white/10" />
         <div className="h-36 animate-pulse rounded-3xl bg-white/10" />

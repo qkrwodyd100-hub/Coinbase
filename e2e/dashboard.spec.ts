@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 
 const payload = {
   asOf: '2026-08-05T00:00:00.000Z',
@@ -34,7 +34,37 @@ const payload = {
   ],
 };
 
+const refreshedPayload = { ...payload, asOf: '2026-08-05T00:01:00.000Z' };
+const stalePayload = {
+  ...payload,
+  assets: payload.assets.map((asset) => (asset.symbol === 'BTC' ? { ...asset, stale: true } : asset)),
+};
+
+function expectNoClientErrors(page: Page) {
+  const errors: string[] = [];
+  page.on('console', (message) => {
+    if (message.text().includes('Failed to load resource: the server responded with a status of 502')) return;
+    if (message.type() === 'error') errors.push(`console: ${message.text()}`);
+  });
+  page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
+  page.on('requestfailed', (request) => errors.push(`requestfailed: ${request.url()} ${request.failure()?.errorText ?? ''}`));
+
+  return () => expect(errors).toEqual([]);
+}
+
+async function expectPositiveSignalStyling(page: Page) {
+  const meter = page.getByRole('meter', { name: /bitcoin signal score/i });
+  await expect(meter).toHaveAttribute('aria-valuenow', '85');
+  await expect(meter.getByText('Strong Buy')).toBeVisible();
+
+  const stroke = await meter.locator('circle').nth(1).evaluate((element) => getComputedStyle(element).stroke);
+  const pillColor = await meter.getByText('Strong Buy').evaluate((element) => getComputedStyle(element).color);
+  expect(stroke).toBe('lab(83.9203 -48.7124 13.8849)');
+  expect(pillColor).toBe('lab(94.9004 -17.0769 5.63836)');
+}
+
 test('dashboard renders mocked live data and supports asset switching', async ({ page }) => {
+  const assertNoClientErrors = expectNoClientErrors(page);
   await page.route('**/api/signals', (route) => route.fulfill({ json: payload }));
 
   await page.goto('/');
@@ -55,9 +85,84 @@ test('dashboard renders mocked live data and supports asset switching', async ({
   await expect(page.getByRole('heading', { name: /ethereum signal/i })).toBeVisible();
   await expect(page.getByRole('tab', { name: /eth.*ethereum/i }).getByText('$3,200')).toBeVisible();
   await expect(page.getByText('Neutral').last()).toBeVisible();
+  await assertNoClientErrors();
+});
+
+test('dashboard exposes accessible loading and score states with positive signal color', async ({ page }, testInfo) => {
+  const assertNoClientErrors = expectNoClientErrors(page);
+  let releaseInitialResponse!: () => void;
+  const initialResponse = new Promise<void>((resolve) => {
+    releaseInitialResponse = resolve;
+  });
+  await page.route('**/api/signals', async (route) => {
+    await initialResponse;
+    await route.fulfill({ json: payload });
+  });
+
+  await page.goto('/');
+
+  await expect(page.getByRole('status', { name: /loading dashboard/i })).toBeVisible();
+  releaseInitialResponse();
+  await expect(page.getByRole('heading', { name: /bitcoin signal/i })).toBeVisible();
+  await expectPositiveSignalStyling(page);
+  await testInfo.attach(`${testInfo.project.name}-dashboard`, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+  await assertNoClientErrors();
+});
+
+test('manual refresh disables the refresh action and replaces the timestamp', async ({ page }) => {
+  const assertNoClientErrors = expectNoClientErrors(page);
+  let releaseRefresh!: () => void;
+  const refreshResponse = new Promise<void>((resolve) => {
+    releaseRefresh = resolve;
+  });
+  let requestCount = 0;
+  let holdRefresh = false;
+  await page.route('**/api/signals', async (route) => {
+    requestCount += 1;
+    if (holdRefresh) await refreshResponse;
+    await route.fulfill({ json: holdRefresh ? refreshedPayload : payload });
+  });
+
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: /bitcoin signal/i })).toBeVisible();
+  await expect(page.getByText(/(?:00|24):00:00/)).toBeVisible();
+  const initialRequestCount = requestCount;
+  holdRefresh = true;
+
+  await page.getByRole('button', { name: /refresh signals/i }).click();
+
+  await expect(page.getByRole('button', { name: /refreshing signals/i })).toBeDisabled();
+  releaseRefresh();
+  await expect(page.getByText(/(?:00|24):01:00/)).toBeVisible();
+  expect(requestCount).toBeGreaterThan(initialRequestCount);
+  await assertNoClientErrors();
+});
+
+test('60-second automatic refresh uses the newest live payload with controlled time', async ({ page }) => {
+  const assertNoClientErrors = expectNoClientErrors(page);
+  await page.clock.install({ time: new Date('2026-08-05T00:00:00.000Z') });
+  let requestCount = 0;
+  let afterInitialRender = false;
+  await page.route('**/api/signals', (route) => {
+    requestCount += 1;
+    return route.fulfill({ json: afterInitialRender ? refreshedPayload : payload });
+  });
+
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: /bitcoin signal/i })).toBeVisible();
+  await expect(page.getByText(/(?:00|24):00:00/)).toBeVisible();
+  const initialRequestCount = requestCount;
+  afterInitialRender = true;
+
+  await page.clock.fastForward(60_000);
+
+  await expect(page.getByText(/(?:00|24):01:00/)).toBeVisible();
+  expect(requestCount).toBeGreaterThan(initialRequestCount);
+  await assertNoClientErrors();
 });
 
 test('dashboard keeps stale data visible after refresh failure', async ({ page }) => {
+  const assertNoClientErrors = expectNoClientErrors(page);
   let shouldFail = false;
   await page.route('**/api/signals', (route) => {
     return shouldFail
@@ -74,4 +179,28 @@ test('dashboard keeps stale data visible after refresh failure', async ({ page }
   await expect(page.getByText(/could not refresh signals/i)).toContainText(/could not refresh/i);
   await expect(page.getByText(/showing the last successful snapshot/i)).toBeVisible();
   await expect(page.getByRole('heading', { name: /bitcoin signal/i })).toBeVisible();
+  await assertNoClientErrors();
+});
+
+test('dashboard shows an initial API error without stale-data copy when no snapshot exists', async ({ page }) => {
+  const assertNoClientErrors = expectNoClientErrors(page);
+  await page.route('**/api/signals', (route) => route.fulfill({ status: 502, json: { error: 'Unable to refresh crypto signals.' } }));
+
+  await page.goto('/');
+
+  await expect(page.getByText(/try again in a moment/i)).toBeVisible();
+  await expect(page.getByText(/showing the last successful snapshot/i)).toBeHidden();
+  await expect(page.getByRole('heading', { name: /bitcoin signal/i })).toBeHidden();
+  await assertNoClientErrors();
+});
+
+test('dashboard surfaces stale API payloads even when the refresh succeeds', async ({ page }) => {
+  const assertNoClientErrors = expectNoClientErrors(page);
+  await page.route('**/api/signals', (route) => route.fulfill({ json: stalePayload }));
+
+  await page.goto('/');
+
+  await expect(page.getByRole('heading', { name: /bitcoin signal/i })).toBeVisible();
+  await expect(page.getByText(/stale data: showing cached snapshot/i)).toBeVisible();
+  await assertNoClientErrors();
 });
