@@ -63,6 +63,7 @@ describe('dashboard behavior', () => {
     expect(await screen.findByRole('heading', { name: /bitcoin signal/i })).toBeInTheDocument();
     expect(screen.getByText('$65,000')).toBeInTheDocument();
     expect(screen.getAllByText('Strong Buy').length).toBeGreaterThan(0);
+    expect(screen.getByText(/kraken futures funding/i)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('tab', { name: /eth.*ethereum/i }));
 

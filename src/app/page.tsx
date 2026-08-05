@@ -65,7 +65,7 @@ export default function Home() {
             <p className="text-sm font-medium uppercase tracking-[0.32em] text-cyan-200/80">Live market signals</p>
             <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-5xl">BTC / ETH Signal Dashboard</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
-              Scores combine RSI(14), Alternative.me Fear & Greed, MA20/MA50 trend alignment, and Binance futures funding.
+              Scores combine RSI(14), Alternative.me Fear & Greed, MA20/MA50 trend alignment, and Kraken futures funding.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
