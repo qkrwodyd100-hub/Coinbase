@@ -83,4 +83,12 @@ describe('indicator calculations', () => {
 
     expect(calculateRsi(closes, 14)).toBeCloseTo(85.39, 2);
   });
+
+  it('uses Wilder smoothing across history after the initial RSI window', () => {
+    const sharedTail = [100, 101, 99, 102, 98, 103, 97, 104, 96, 105, 95, 106, 94, 107, 93];
+    const risingHistory = [80, 84, 88, 92, 96, ...sharedTail];
+    const fallingHistory = [120, 116, 112, 108, 104, ...sharedTail];
+
+    expect(calculateRsi(risingHistory, 14)).not.toBe(calculateRsi(fallingHistory, 14));
+  });
 });

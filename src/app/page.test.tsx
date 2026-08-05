@@ -4,6 +4,15 @@ import userEvent from '@testing-library/user-event';
 import { act, createElement } from 'react';
 import Home from '@/app/page';
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+
+  return { promise, resolve };
+}
+
 const okPayload = {
   asOf: '2026-08-05T00:00:00.000Z',
   assets: [
@@ -119,6 +128,77 @@ describe('dashboard behavior', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not refresh/i);
     expect(screen.getByText(/showing the last successful snapshot/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /bitcoin signal/i })).toBeInTheDocument();
+  });
+
+  it('keeps the newest successful refresh when an older request fails later', async () => {
+    const older = deferred<{ ok: boolean; json: () => Promise<typeof okPayload> }>();
+    const newerPayload = { ...okPayload, asOf: '2026-08-05T00:02:00.000Z' };
+    const newer = deferred<{ ok: boolean; json: () => Promise<typeof okPayload> }>();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => okPayload })
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise);
+    vi.stubGlobal('fetch', fetchMock);
+    const intervalSpy = vi.spyOn(window, 'setInterval').mockReturnValue(1 as unknown as NodeJS.Timeout);
+    vi.spyOn(window, 'clearInterval').mockImplementation(() => undefined);
+
+    render(createElement(Home));
+    await screen.findByRole('heading', { name: /bitcoin signal/i });
+    const intervalCallback = intervalSpy.mock.calls[0][0] as () => void;
+
+    await act(async () => intervalCallback());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await act(async () => intervalCallback());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await act(async () => {
+      newer.resolve({ ok: true, json: async () => newerPayload });
+      await newer.promise;
+    });
+    await waitFor(() => expect(screen.getByText(/00:02:00/)).toBeInTheDocument());
+    await act(async () => {
+      older.resolve({ ok: false, json: async () => okPayload });
+      await older.promise;
+    });
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /bitcoin signal/i })).toBeInTheDocument();
+  });
+
+  it('keeps the newest failure when an older request succeeds later', async () => {
+    const olderPayload = { ...okPayload, asOf: '2026-08-05T00:03:00.000Z' };
+    const older = deferred<{ ok: boolean; json: () => Promise<typeof okPayload> }>();
+    const newer = deferred<{ ok: boolean; json: () => Promise<typeof okPayload> }>();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => okPayload })
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise);
+    vi.stubGlobal('fetch', fetchMock);
+    const intervalSpy = vi.spyOn(window, 'setInterval').mockReturnValue(1 as unknown as NodeJS.Timeout);
+    vi.spyOn(window, 'clearInterval').mockImplementation(() => undefined);
+
+    render(createElement(Home));
+    await screen.findByRole('heading', { name: /bitcoin signal/i });
+    const intervalCallback = intervalSpy.mock.calls[0][0] as () => void;
+
+    await act(async () => intervalCallback());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await act(async () => intervalCallback());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await act(async () => {
+      newer.resolve({ ok: false, json: async () => okPayload });
+      await newer.promise;
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent(/showing the last successful snapshot/i);
+    await act(async () => {
+      older.resolve({ ok: true, json: async () => olderPayload });
+      await older.promise;
+    });
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByText(/00:03:00/)).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /bitcoin signal/i })).toBeInTheDocument();
   });
 });

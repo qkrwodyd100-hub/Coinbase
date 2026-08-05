@@ -50,7 +50,7 @@ async function getTickerPrice(symbol: string): Promise<number> {
     throw new Error(`Unexpected ticker payload for ${symbol}`);
   }
 
-  return parseFiniteNumber(payload.price, `${symbol} price`);
+  return parsePositiveFiniteNumber(payload.price, `${symbol} price`);
 }
 
 async function getDailyCloses(symbol: string): Promise<number[]> {
@@ -63,7 +63,7 @@ async function getDailyCloses(symbol: string): Promise<number[]> {
     if (!Array.isArray(entry) || typeof entry[4] !== 'string') {
       throw new Error(`Unexpected kline close at ${symbol}[${index}]`);
     }
-    return parseFiniteNumber(entry[4], `${symbol} close`);
+    return parsePositiveFiniteNumber(entry[4], `${symbol} close`);
   });
 
   if (closes.length < 51) {
@@ -79,7 +79,7 @@ async function getFundingPercent(symbol: string): Promise<number> {
     throw new Error(`Unexpected funding payload for ${symbol}`);
   }
 
-  return parseFiniteNumber(payload.lastFundingRate, `${symbol} funding`) * 100;
+  return parseBoundedFiniteNumber(payload.lastFundingRate, `${symbol} funding`, -1, 1) * 100;
 }
 
 async function getFearGreedIndex(): Promise<number> {
@@ -92,7 +92,7 @@ async function getFearGreedIndex(): Promise<number> {
     throw new Error('Missing latest Fear & Greed value.');
   }
 
-  return parseFiniteNumber(latest.value, 'Fear & Greed');
+  return parseBoundedFiniteNumber(latest.value, 'Fear & Greed', 0, 100);
 }
 
 async function fetchJson(url: string): Promise<unknown> {
@@ -124,6 +124,22 @@ function parseFiniteNumber(value: string, label: string): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
     throw new Error(`${label} is not a finite number.`);
+  }
+  return parsed;
+}
+
+function parsePositiveFiniteNumber(value: string, label: string): number {
+  const parsed = parseFiniteNumber(value, label);
+  if (parsed <= 0) {
+    throw new Error(`${label} must be greater than zero.`);
+  }
+  return parsed;
+}
+
+function parseBoundedFiniteNumber(value: string, label: string, minimum: number, maximum: number): number {
+  const parsed = parseFiniteNumber(value, label);
+  if (parsed < minimum || parsed > maximum) {
+    throw new Error(`${label} must be between ${minimum} and ${maximum}.`);
   }
   return parsed;
 }

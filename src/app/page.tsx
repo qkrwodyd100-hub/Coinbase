@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatUsd, type AssetSignal, type DashboardPayload, type SignalTone } from '@/lib/signals';
 
 type LoadState = 'loading' | 'refreshing' | 'success' | 'failure';
@@ -12,8 +12,11 @@ export default function Home() {
   const [selectedSymbol, setSelectedSymbol] = useState<'BTC' | 'ETH'>('BTC');
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [error, setError] = useState<string | null>(null);
+  const requestGeneration = useRef(0);
 
   const refreshSignals = useCallback(async () => {
+    const generation = requestGeneration.current + 1;
+    requestGeneration.current = generation;
     setLoadState((current) => (current === 'loading' ? 'loading' : 'refreshing'));
     setError(null);
 
@@ -23,10 +26,12 @@ export default function Home() {
         throw new Error('Could not refresh market data.');
       }
       const nextPayload = (await response.json()) as DashboardPayload;
+      if (generation !== requestGeneration.current) return;
       setPayload(nextPayload);
       setLoadState('success');
       setSelectedSymbol((current) => (nextPayload.assets.some((asset) => asset.symbol === current) ? current : (nextPayload.assets[0]?.symbol ?? 'BTC')));
     } catch (refreshError) {
+      if (generation !== requestGeneration.current) return;
       setError(refreshError instanceof Error ? refreshError.message : 'Could not refresh crypto signals.');
       setLoadState('failure');
     }
@@ -117,7 +122,7 @@ function DashboardContent({
   return (
     <div className="grid flex-1 gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
       <aside className="space-y-4">
-        <div role="tablist" aria-label="Assets" className="grid grid-cols-2 gap-3 lg:grid-cols-1">
+        <div role="tablist" aria-label="Assets" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
           {assets.map((asset) => (
             <button
               key={asset.symbol}

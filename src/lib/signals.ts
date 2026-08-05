@@ -52,12 +52,11 @@ export function calculateRsi(closes: number[], period = 14): number {
     throw new Error(`Need at least ${period + 1} closes to calculate RSI(${period}).`);
   }
 
-  const recent = closes.slice(-(period + 1));
   let gains = 0;
   let losses = 0;
 
-  for (let index = 1; index < recent.length; index += 1) {
-    const change = recent[index] - recent[index - 1];
+  for (let index = 1; index <= period; index += 1) {
+    const change = closes[index] - closes[index - 1];
     if (change > 0) {
       gains += change;
     } else {
@@ -65,8 +64,16 @@ export function calculateRsi(closes: number[], period = 14): number {
     }
   }
 
-  const averageGain = gains / period;
-  const averageLoss = losses / period;
+  let averageGain = gains / period;
+  let averageLoss = losses / period;
+
+  for (let index = period + 1; index < closes.length; index += 1) {
+    const change = closes[index] - closes[index - 1];
+    const gain = Math.max(change, 0);
+    const loss = Math.max(-change, 0);
+    averageGain = (averageGain * (period - 1) + gain) / period;
+    averageLoss = (averageLoss * (period - 1) + loss) / period;
+  }
 
   if (averageLoss === 0) {
     return averageGain === 0 ? 50 : 100;

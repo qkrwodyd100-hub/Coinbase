@@ -43,6 +43,13 @@ test('dashboard renders mocked live data and supports asset switching', async ({
   await expect(page.getByRole('tab', { name: /btc.*bitcoin/i }).getByText('$65,000')).toBeVisible();
   await expect(page.getByText('Strong Buy').last()).toBeVisible();
 
+  const viewport = page.viewportSize();
+  for (const pill of [page.getByRole('tab', { name: /btc.*bitcoin/i }).getByText('Strong Buy'), page.getByRole('tab', { name: /eth.*ethereum/i }).getByText('Neutral')]) {
+    const box = await pill.boundingBox();
+    expect(box).not.toBeNull();
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(viewport?.width ?? Number.POSITIVE_INFINITY);
+  }
+
   await page.getByRole('tab', { name: /eth.*ethereum/i }).click();
 
   await expect(page.getByRole('heading', { name: /ethereum signal/i })).toBeVisible();
@@ -51,18 +58,17 @@ test('dashboard renders mocked live data and supports asset switching', async ({
 });
 
 test('dashboard keeps stale data visible after refresh failure', async ({ page }) => {
-  let requestCount = 0;
+  let shouldFail = false;
   await page.route('**/api/signals', (route) => {
-    requestCount += 1;
-    if (requestCount === 1) {
-      return route.fulfill({ json: payload });
-    }
-    return route.fulfill({ status: 502, json: { error: 'Unable to refresh crypto signals.' } });
+    return shouldFail
+      ? route.fulfill({ status: 502, json: { error: 'Unable to refresh crypto signals.' } })
+      : route.fulfill({ json: payload });
   });
 
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /bitcoin signal/i })).toBeVisible();
 
+  shouldFail = true;
   await page.getByRole('button', { name: /refresh signals/i }).click();
 
   await expect(page.getByText(/could not refresh signals/i)).toContainText(/could not refresh/i);
