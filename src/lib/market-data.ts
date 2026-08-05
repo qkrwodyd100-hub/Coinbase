@@ -4,16 +4,16 @@ type AssetConfig = {
   symbol: 'BTC' | 'ETH';
   name: string;
   krakenPair: 'XBTUSD' | 'ETHUSD';
-  fundingSymbol: 'BTCUSDT' | 'ETHUSDT';
+  fundingSymbol: 'PF_XBTUSD' | 'PF_ETHUSD';
 };
 
 const ASSETS: AssetConfig[] = [
-  { symbol: 'BTC', name: 'Bitcoin', krakenPair: 'XBTUSD', fundingSymbol: 'BTCUSDT' },
-  { symbol: 'ETH', name: 'Ethereum', krakenPair: 'ETHUSD', fundingSymbol: 'ETHUSDT' },
+  { symbol: 'BTC', name: 'Bitcoin', krakenPair: 'XBTUSD', fundingSymbol: 'PF_XBTUSD' },
+  { symbol: 'ETH', name: 'Ethereum', krakenPair: 'ETHUSD', fundingSymbol: 'PF_ETHUSD' },
 ];
 
 const KRAKEN_BASE = 'https://api.kraken.com/0/public';
-const BYBIT_BASE = 'https://api.bybit.com/v5/market';
+const KRAKEN_FUTURES_BASE = 'https://futures.kraken.com/derivatives/api/v3';
 const FEAR_GREED_URL = 'https://api.alternative.me/fng/?limit=1&format=json';
 const REQUEST_TIMEOUT_MS = 8_000;
 const REVALIDATE_SECONDS = 55;
@@ -75,15 +75,12 @@ async function getDailyCloses(symbol: string): Promise<number[]> {
 }
 
 async function getFundingPercent(symbol: string): Promise<number> {
-  const payload = await fetchJson(`${BYBIT_BASE}/tickers?category=linear&symbol=${symbol}`);
-  const ticker = isRecord(payload) && isRecord(payload.result) && Array.isArray(payload.result.list)
-    ? payload.result.list[0]
-    : undefined;
-  if (!isRecord(payload) || payload.retCode !== 0 || !isRecord(ticker) || typeof ticker.fundingRate !== 'string') {
+  const payload = await fetchJson(`${KRAKEN_FUTURES_BASE}/tickers/${symbol}`);
+  if (!isRecord(payload) || payload.result !== 'success' || !isRecord(payload.ticker) || typeof payload.ticker.fundingRate !== 'number') {
     throw new Error(`Unexpected funding payload for ${symbol}`);
   }
 
-  return parseBoundedFiniteNumber(ticker.fundingRate, `${symbol} funding`, -1, 1) * 100;
+  return parseBoundedNumber(payload.ticker.fundingRate, `${symbol} funding`, -100, 100);
 }
 
 async function getFearGreedIndex(): Promise<number> {
@@ -154,4 +151,11 @@ function parseBoundedFiniteNumber(value: string, label: string, minimum: number,
     throw new Error(`${label} must be between ${minimum} and ${maximum}.`);
   }
   return parsed;
+}
+
+function parseBoundedNumber(value: number, label: string, minimum: number, maximum: number): number {
+  if (!Number.isFinite(value) || value < minimum || value > maximum) {
+    throw new Error(`${label} must be between ${minimum} and ${maximum}.`);
+  }
+  return value;
 }

@@ -5,7 +5,7 @@ type Overrides = {
   fearGreed?: string;
   btcPrice?: string;
   btcClose?: string;
-  btcFunding?: string;
+  btcFunding?: number;
 };
 
 function installMarketFetch(overrides: Overrides = {}) {
@@ -29,11 +29,11 @@ function installMarketFetch(overrides: Overrides = {}) {
             last: 123,
           },
         };
-      } else if (url.includes('api.bybit.com') && url.includes('/tickers')) {
-        const isBtc = url.includes('BTCUSDT');
+      } else if (url.includes('futures.kraken.com') && url.includes('/tickers/')) {
+        const isBtc = url.includes('PF_XBTUSD');
         payload = {
-          retCode: 0,
-          result: { list: [{ fundingRate: isBtc ? (overrides.btcFunding ?? '0.0001') : '0.0001' }] },
+          result: 'success',
+          ticker: { fundingRate: isBtc ? (overrides.btcFunding ?? 0.01) : 0.01 },
         };
       } else {
         throw new Error(`Unexpected test URL: ${url}`);
@@ -51,7 +51,7 @@ describe('market payload validation', () => {
     [{ btcPrice: '-1' }, /price must be greater than zero/i],
     [{ btcClose: '0' }, /close must be greater than zero/i],
     [{ fearGreed: '101' }, /fear & greed must be between 0 and 100/i],
-    [{ btcFunding: '1.1' }, /funding must be between -1 and 1/i],
+    [{ btcFunding: 101 }, /funding must be between -100 and 100/i],
   ] satisfies Array<[Overrides, RegExp]>)('rejects invalid upstream numeric domains: %#', async (overrides, message) => {
     installMarketFetch(overrides);
 
@@ -65,6 +65,8 @@ describe('market payload validation', () => {
 
     expect(payload.assets.map((asset) => asset.symbol)).toEqual(['BTC', 'ETH']);
     expect(payload.assets.every((asset) => asset.overallScore >= 0 && asset.overallScore <= 100)).toBe(true);
-    expect(vi.mocked(fetch).mock.calls.map(([input]) => String(input))).not.toContainEqual(expect.stringContaining('binance.com'));
+    const urls = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
+    expect(urls).not.toContainEqual(expect.stringContaining('binance.com'));
+    expect(urls).not.toContainEqual(expect.stringContaining('bybit.com'));
   });
 });
