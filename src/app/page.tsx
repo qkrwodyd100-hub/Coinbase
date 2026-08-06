@@ -8,7 +8,7 @@ import {
   type ExtremeSignalAlert,
   type ExtremeSignalAlertState,
 } from '@/lib/alerts';
-import { formatUsdWithKrw, type AssetSignal, type DashboardPayload, type SignalTone } from '@/lib/signals';
+import { formatUsdWithKrw, type AssetSignal, type DashboardPayload, type IndicatorId, type IndicatorScore, type SignalTone } from '@/lib/signals';
 
 type LoadState = 'loading' | 'refreshing' | 'success' | 'failure';
 
@@ -17,6 +17,76 @@ const ALERT_STATE_STORAGE_KEY = 'crypto-signal-dashboard:extreme-alert-state';
 const ALERT_HISTORY_STORAGE_KEY = 'crypto-signal-dashboard:extreme-alert-history';
 const ALERT_ENABLED_STORAGE_KEY = 'crypto-signal-dashboard:extreme-alert-enabled';
 const MAX_ALERT_HISTORY = 10;
+
+type IndicatorDetailMetadata = {
+  what: string;
+  calculation: string;
+  scoreBasis: string;
+  interpretation: string;
+  source: string;
+  limitations: string;
+};
+
+const INVESTMENT_CAVEAT = '보조지표이며 단독 매수·매도 판단 근거가 아닙니다. 가격, 리스크 한도, 포지션 규모, 시간 지평과 함께 확인해야 합니다.';
+
+const INDICATOR_DETAILS: Record<IndicatorId, IndicatorDetailMetadata> = {
+  'moving-averages': {
+    what: '현재가가 MA20·MA50 대비 어디에 있는지 확인해 중기 추세 정렬과 단기 이격을 함께 보는 추세 지표입니다.',
+    calculation: '최근 종가 20개와 50개의 단순 이동평균을 계산하고, 현재가와 MA20의 이격률 및 MA20/MA50 배열을 비교합니다.',
+    scoreBasis: 'MA20이 MA50 위에 있고 현재가가 MA20 이상이며 이격이 5% 이내면 최대 점수를 주고, 과열 이격·MA20 이탈·약세 배열일수록 감점합니다.',
+    interpretation: '상승 정렬은 추세 참여 가능성을 높이지만, MA20 이격이 커질수록 추격 매수 리스크가 커집니다.',
+    source: 'Binance 현물 캔들 종가와 대시보드의 USD/KRW 환율을 사용합니다.',
+    limitations: '이동평균은 후행 지표라 급락·급등 전환을 늦게 반영하며, 횡보장에서는 잦은 속임수가 생길 수 있습니다.',
+  },
+  rsi: {
+    what: 'RSI는 최근 상승폭과 하락폭의 상대 강도를 비교해 과매도·과매수 구간을 추정하는 모멘텀 지표입니다.',
+    calculation: '현재 대시보드는 14기간 종가 변화로 RSI(14)를 계산합니다.',
+    scoreBasis: 'RSI 30 이하는 과매도 구간으로 높은 점수를, 70 이상은 과매수 구간으로 0점을 부여합니다.',
+    interpretation: '낮은 RSI는 반등 후보를 찾는 데 도움을 주지만 강한 하락 추세에서는 낮은 RSI가 오래 지속될 수 있습니다.',
+    source: 'Binance 현물 캔들 종가를 사용합니다.',
+    limitations: 'RSI는 방향 전환 확정 신호가 아니며, 추세·거래량·선물 포지셔닝과 함께 봐야 합니다.',
+  },
+  mfi: {
+    what: 'MFI는 가격과 거래량을 함께 사용해 자금 흐름이 과매도 또는 과매수에 가까운지 보는 지표입니다.',
+    calculation: '14기간의 typical price와 거래량으로 양·음의 money flow를 계산해 MFI(14)를 산출합니다.',
+    scoreBasis: 'MFI 20 이하는 거래량이 동반된 과매도 가능성으로 높은 점수를 주고, 80 이상은 과매수로 0점을 줍니다.',
+    interpretation: '낮은 MFI는 매도 압력 소진 가능성을 시사하지만, 거래량 급변이나 거래소별 유동성 차이에 민감합니다.',
+    source: 'Binance 현물 캔들 가격과 거래량을 사용합니다.',
+    limitations: '거래량 데이터 품질과 거래소 커버리지에 의존하며, 단독으로 바닥을 확정하지 못합니다.',
+  },
+  funding: {
+    what: '펀딩비는 무기한 선물 시장에서 롱·숏 포지션 쏠림과 레버리지 과열을 추정하는 지표입니다.',
+    calculation: 'Binance 무기한 선물의 최근 펀딩비율을 퍼센트로 표시합니다.',
+    scoreBasis: '음수 또는 중립 펀딩은 롱 과열이 낮다고 보고 높은 점수를, 높은 양수 펀딩은 낮은 점수를 줍니다.',
+    interpretation: '양수 펀딩이 높을수록 롱 포지션 비용과 청산 리스크가 커질 수 있습니다.',
+    source: 'Binance 선물 펀딩비 데이터를 사용합니다.',
+    limitations: '펀딩비는 거래소·시점별로 달라질 수 있고, 강한 추세에서는 높은 펀딩이 즉시 하락을 뜻하지 않습니다.',
+  },
+  'futures-positioning': {
+    what: '펀딩비와 미체결약정(OI)을 결합해 선물 시장 레버리지 쏠림과 추세 참여 여부를 보는 포지셔닝 지표입니다.',
+    calculation: '최근 Binance 선물 펀딩비율과 미체결약정 변화율, 가격 변화 방향을 함께 비교합니다.',
+    scoreBasis: '중립·음수 펀딩과 건전한 가격/OI 동행은 가점, 높은 양수 펀딩과 OI 증가는 레버리지 과열로 감점합니다.',
+    interpretation: '가격 상승과 OI 증가가 함께 나타나면 추세 참여로 볼 수 있지만, 과도한 펀딩과 겹치면 반대 청산 리스크도 커집니다.',
+    source: 'Binance 선물 펀딩비와 미체결약정 데이터를 사용합니다.',
+    limitations: 'OI 결측 또는 지연 시 펀딩 가중치만 사용하며, 거래소별 포지션 분포는 반영하지 못합니다.',
+  },
+  'fear-greed': {
+    what: '공포·탐욕 지수는 시장 심리를 0~100으로 압축해 역발상 관점의 과열·침체를 보는 보조 지표입니다.',
+    calculation: 'Alternative.me의 Crypto Fear & Greed Index 최신 값을 사용합니다.',
+    scoreBasis: '25 이하 극단적 공포는 높은 역발상 점수, 75 초과 극단적 탐욕은 0점을 부여합니다.',
+    interpretation: '공포 구간은 장기 분할 매수 후보를 찾는 데 유용하지만, 공포가 더 심해지는 구간에서는 손실 변동성이 큽니다.',
+    source: 'Alternative.me Crypto Fear & Greed Index를 사용합니다.',
+    limitations: '전체 암호화폐 시장 심리 지표라 BTC/ETH 개별 수급을 직접 설명하지는 못합니다.',
+  },
+  'eth-btc-strength': {
+    what: 'ETH/BTC 상대강도는 ETH가 BTC 대비 강한지 약한지를 보며 ETH 점수에 작은 보정값으로 반영하는 지표입니다.',
+    calculation: 'ETH/BTC 현재 비율과 20봉 이동평균의 이격을 -2%~+2% 범위에서 0~100점으로 정규화합니다.',
+    scoreBasis: 'ETH 최종 점수는 기본 지표 95%와 ETH/BTC 상대강도 정규화 점수 5%를 혼합합니다.',
+    interpretation: 'ETH/BTC가 MA20보다 강하면 ETH 선호도가 소폭 올라가지만, 전체 시장 하락 리스크를 상쇄하지는 못합니다.',
+    source: 'ETH/BTC 가격 비율과 20봉 이동평균 데이터를 사용합니다.',
+    limitations: '상대강도는 ETH만의 보정 지표이며 BTC 화면에는 표시되지 않을 수 있습니다.',
+  },
+};
 
 export default function Home() {
   const [payload, setPayload] = useState<DashboardPayload | null>(null);
@@ -213,6 +283,31 @@ function DashboardContent({
   onRequestBrowserNotifications: () => void;
   alertHistory: ExtremeSignalAlert[];
 }) {
+  const [selectedIndicatorId, setSelectedIndicatorId] = useState<IndicatorId | null>(null);
+  const indicatorButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const selectedIndicator = selectedIndicatorId ? (selectedAsset.indicators.find((indicator) => indicator.id === selectedIndicatorId) ?? null) : null;
+  const selectedContribution = selectedIndicator ? calculateIndicatorContribution(selectedIndicator, selectedAsset) : 0;
+
+  useEffect(() => {
+    setSelectedIndicatorId(null);
+  }, [selectedAsset.symbol]);
+
+  const closeIndicatorDetail = useCallback(() => {
+    const triggerKey = selectedIndicator ? indicatorTriggerKey(selectedAsset.symbol, selectedIndicator.id) : null;
+    setSelectedIndicatorId(null);
+    if (triggerKey) {
+      window.requestAnimationFrame(() => indicatorButtonRefs.current[triggerKey]?.focus());
+    }
+  }, [selectedAsset.symbol, selectedIndicator]);
+
+  const selectAsset = useCallback(
+    (symbol: 'BTC' | 'ETH') => {
+      setSelectedIndicatorId(null);
+      onSelect(symbol);
+    },
+    [onSelect],
+  );
+
   return (
     <div className="grid min-w-0 flex-1 gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
       <aside className="min-w-0 space-y-4">
@@ -223,8 +318,8 @@ function DashboardContent({
               type="button"
               role="tab"
               aria-selected={asset.symbol === selectedSymbol}
-              onClick={() => onSelect(asset.symbol)}
-              className="min-w-0 rounded-3xl border border-white/10 bg-white/[0.06] p-4 text-left transition hover:bg-white/[0.10] aria-selected:border-cyan-200/80 aria-selected:bg-cyan-200/15"
+              onClick={() => selectAsset(asset.symbol)}
+              className="min-w-0 rounded-3xl border border-white/10 bg-white/[0.06] p-4 text-left transition hover:bg-white/[0.10] focus:outline-none focus:ring-2 focus:ring-cyan-200/80 focus:ring-offset-2 focus:ring-offset-slate-950 motion-reduce:transition-none aria-selected:border-cyan-200/80 aria-selected:bg-cyan-200/15"
             >
               <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
@@ -267,9 +362,26 @@ function DashboardContent({
           <ScoreGauge assetName={selectedAsset.name} score={selectedAsset.overallScore} tone={selectedAsset.signal.tone} label={selectedAsset.signal.label} />
         </div>
 
-        <div className="mt-7 grid min-w-0 gap-4 sm:grid-cols-2">
+        <div className="mt-7 flex min-w-0 flex-col gap-3 border-t border-white/10 pt-6 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-200/70">Indicator stack</p>
+            <h3 className="mt-1 text-2xl font-black tracking-tight text-slate-50">세부 지표</h3>
+          </div>
+          <p className="max-w-xl text-sm leading-6 text-slate-300">카드를 선택하면 계산 방식, 현재 배점, 데이터 출처와 한계를 확인할 수 있습니다.</p>
+        </div>
+
+        <div className="mt-4 grid min-w-0 gap-4 sm:grid-cols-2">
           {selectedAsset.indicators.map((indicator) => (
-            <article key={indicator.id} className="min-w-0 rounded-3xl border border-white/10 bg-slate-950/35 p-5">
+            <button
+              key={indicator.id}
+              ref={(node) => {
+                indicatorButtonRefs.current[indicatorTriggerKey(selectedAsset.symbol, indicator.id)] = node;
+              }}
+              type="button"
+              aria-label={`${indicator.title} ${indicator.value} ${indicator.score}/${indicator.maxScore} 상세 설명 열기`}
+              onClick={() => setSelectedIndicatorId(indicator.id)}
+              className="group min-w-0 rounded-3xl border border-white/10 bg-slate-950/35 p-5 text-left transition hover:-translate-y-0.5 hover:border-cyan-200/50 hover:bg-slate-900/70 focus:outline-none focus:ring-2 focus:ring-cyan-200/80 focus:ring-offset-2 focus:ring-offset-slate-950 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+            >
               <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="font-bold text-slate-100">{indicator.title}</h3>
@@ -293,11 +405,147 @@ function DashboardContent({
                 <div className="h-2 rounded-full bg-cyan-300" style={{ width: `${(indicator.score / indicator.maxScore) * 100}%` }} />
               </div>
               <p className="mt-4 text-sm leading-6 text-slate-300">{indicator.interpretation}</p>
-            </article>
+              <span className="mt-4 inline-flex min-h-11 items-center rounded-2xl border border-cyan-200/20 px-3 text-xs font-bold text-cyan-100 transition group-hover:border-cyan-200/50 motion-reduce:transition-none">
+                상세 설명 보기
+              </span>
+            </button>
           ))}
         </div>
       </section>
+      {selectedIndicator ? (
+        <IndicatorDetailDialog asset={selectedAsset} indicator={selectedIndicator} contribution={selectedContribution} onClose={closeIndicatorDetail} />
+      ) : null}
     </div>
+  );
+}
+
+function indicatorTriggerKey(symbol: AssetSignal['symbol'], indicatorId: IndicatorId): string {
+  return `${symbol}:${indicatorId}`;
+}
+
+function calculateIndicatorContribution(indicator: IndicatorScore, asset: AssetSignal): number {
+  if (indicator.id === 'eth-btc-strength') return indicator.score * 0.05;
+  const baseIndicators = asset.indicators.filter((item) => item.id !== 'eth-btc-strength');
+  const baseMaxScore = baseIndicators.reduce((total, item) => total + item.maxScore, 0);
+  if (baseMaxScore === 0) return 0;
+  const assetWeight = asset.symbol === 'ETH' && asset.indicators.some((item) => item.id === 'eth-btc-strength') ? 0.95 : 1;
+  return (indicator.score / baseMaxScore) * 100 * assetWeight;
+}
+
+function IndicatorDetailDialog({
+  asset,
+  indicator,
+  contribution,
+  onClose,
+}: {
+  asset: AssetSignal;
+  indicator: IndicatorScore;
+  contribution: number;
+  onClose: () => void;
+}) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const metadata = INDICATOR_DETAILS[indicator.id];
+  const titleId = `indicator-detail-title-${asset.symbol}-${indicator.id}`;
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    closeButtonRef.current?.focus();
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== 'Tab' || !panelRef.current) return;
+    const focusable = panelRef.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/75 p-0 backdrop-blur-sm sm:items-center sm:p-6" onMouseDown={onClose}>
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+        onMouseDown={(event) => event.stopPropagation()}
+        className="max-h-[88vh] w-full overflow-y-auto rounded-t-[2rem] border border-white/10 bg-[#101827] p-5 text-slate-100 shadow-2xl shadow-black/50 sm:max-w-3xl sm:rounded-[2rem] sm:p-7"
+      >
+        <div className="flex min-w-0 items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-cyan-200/70">{asset.symbol} indicator detail</p>
+            <h2 id={titleId} className="mt-2 break-words text-2xl font-black tracking-tight sm:text-3xl">
+              {indicator.title} 상세 설명
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-300">{asset.name} 현재 화면에 표시된 값과 점수를 기준으로 설명합니다.</p>
+          </div>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={onClose}
+            aria-label="지표 상세 설명 닫기"
+            className="min-h-11 shrink-0 rounded-2xl border border-white/10 bg-white/10 px-4 text-sm font-black text-slate-100 transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-cyan-200/80 focus:ring-offset-2 focus:ring-offset-slate-950 motion-reduce:transition-none"
+          >
+            닫기
+          </button>
+        </div>
+
+        <h3 className="mt-6 text-base font-black text-slate-100">현재 값과 배점</h3>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <DetailMetric label="현재 값" value={indicator.value} />
+          <DetailMetric label="현재 배점" value={`${indicator.score}/${indicator.maxScore}점`} />
+          <DetailMetric label="총점 기여도" value={`${contribution.toFixed(1)}점`} />
+        </div>
+
+        <div className="mt-6 grid gap-4 text-sm leading-6 sm:grid-cols-2">
+          <DetailSection title="무엇을 보는 지표인가요?" body={metadata.what} />
+          <DetailSection title="현재 대시보드 계산 방식" body={metadata.calculation} />
+          <DetailSection title="현재 점수의 구간·판정 근거" body={`${metadata.scoreBasis} 현재 판정: ${indicator.interpretation}`} />
+          <DetailSection title="일반적인 해석과 주의점" body={metadata.interpretation} />
+          <DetailSection title="데이터 출처" body={metadata.source} />
+          <DetailSection title="결측·지역 제한·백테스트 한계" body={metadata.limitations} />
+        </div>
+
+        <p className="mt-6 rounded-2xl border border-amber-200/30 bg-amber-200/10 p-4 text-sm font-semibold leading-6 text-amber-100">{INVESTMENT_CAVEAT}</p>
+      </div>
+    </div>
+  );
+}
+
+function DetailMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{label}</p>
+      <p className="mt-2 break-words text-xl font-black text-slate-50">{value}</p>
+    </div>
+  );
+}
+
+function DetailSection({ title, body }: { title: string; body: string }) {
+  return (
+    <section className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+      <h3 className="font-black text-slate-100">{title}</h3>
+      <p className="mt-2 text-slate-300">{body}</p>
+    </section>
   );
 }
 

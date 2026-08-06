@@ -93,7 +93,15 @@ async function expectPositiveSignalStyling(page: Page) {
 async function expectNoHorizontalOverflow(page: Page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+  return overflow;
 }
+
+const qaViewports = [
+  { name: 'iphone-12', width: 390, height: 844 },
+  { name: 'iphone-15-plus', width: 430, height: 932 },
+  { name: 'tablet', width: 768, height: 1024 },
+  { name: 'desktop', width: 1440, height: 900 },
+];
 
 test('dashboard renders Korean live data, KRW prices, and supports asset switching', async ({ page }) => {
   const assertNoClientErrors = expectNoClientErrors(page);
@@ -129,6 +137,108 @@ test('dashboard renders Korean live data, KRW prices, and supports asset switchi
   await expect(ethMovingAverageRows.nth(1)).toHaveText('MA20 $3,100 · ₩4,247,000');
   await expect(ethMovingAverageRows.nth(2)).toHaveText('MA50 $3,250 · ₩4,452,500');
   await expectNoHorizontalOverflow(page);
+  await assertNoClientErrors();
+});
+
+test('indicator cards open accessible details, close with Escape, and do not leave stale content after asset switching', async ({ page }) => {
+  const assertNoClientErrors = expectNoClientErrors(page);
+  await page.route('**/api/signals', (route) => route.fulfill({ json: payload }));
+
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: /비트코인 시그널/i })).toBeVisible();
+
+  const rsiCard = page.getByRole('button', { name: /RSI \(14\).*28\.00.*20\/20/i });
+  await rsiCard.click();
+  const rsiDialog = page.getByRole('dialog', { name: 'RSI (14) 상세 설명' });
+  await expect(rsiDialog).toBeVisible();
+  await expect(rsiDialog).toContainText('현재 값과 배점');
+  await expect(rsiDialog).toContainText('보조지표이며 단독 매수·매도 판단 근거가 아닙니다.');
+  await page.keyboard.press('Escape');
+  await expect(rsiDialog).toBeHidden();
+  await expect(rsiCard).toBeFocused();
+
+  const futuresCard = page.getByRole('button', { name: /선물 펀딩비·미체결약정.*-0\.0010%.*20\/20/i });
+  await futuresCard.focus();
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('dialog', { name: '선물 펀딩비·미체결약정 상세 설명' })).toContainText('-0.0010% / OI 2.00%');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await page.getByRole('tab', { name: /eth.*이더리움/i }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByRole('heading', { name: /이더리움 시그널/i })).toBeVisible();
+  await expect(page.getByText('-0.0010% / OI 2.00%')).toBeHidden();
+  await expectNoHorizontalOverflow(page);
+  await assertNoClientErrors();
+});
+
+test('indicator detail bottom sheet is scrollable on mobile and honors reduced-motion preferences', async ({ page }, testInfo) => {
+  const assertNoClientErrors = expectNoClientErrors(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.route('**/api/signals', (route) => route.fulfill({ json: payload }));
+
+  await page.goto('/');
+  const movingAverageCard = page.getByRole('button', { name: /이동평균.*65,000.*25\/25/i });
+  await movingAverageCard.click();
+
+  const dialog = page.getByRole('dialog', { name: '이동평균 상세 설명' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAttribute('aria-modal', 'true');
+  await expect(dialog).toContainText('결측·지역 제한·백테스트 한계');
+  await expect(dialog).toContainText('현재가와 MA20의 이격률 및 MA20/MA50 배열을 비교합니다.');
+  await expect(dialog).toContainText('$65,000 · ₩89,050,000 / MA20 $63,000 · ₩86,310,000 / MA50 $61,000 · ₩83,570,000');
+  await expect(dialog).toContainText('25/25점');
+  await expect(dialog).toContainText('31.3점');
+  const reducedTransitionMs = await movingAverageCard.evaluate((element) => {
+    const duration = getComputedStyle(element).transitionDuration;
+    return duration.endsWith('ms') ? Number.parseFloat(duration) : Number.parseFloat(duration) * 1000;
+  });
+  expect(reducedTransitionMs).toBeLessThanOrEqual(1);
+  await dialog.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(dialog.getByText(/보조지표이며 단독 매수·매도 판단 근거가 아닙니다/i)).toBeVisible();
+  const dialogBox = await dialog.boundingBox();
+  expect(dialogBox?.x).toBeGreaterThanOrEqual(0);
+  expect(dialogBox?.width).toBeLessThanOrEqual(390);
+  await expectNoHorizontalOverflow(page);
+  await testInfo.attach('mobile-indicator-detail', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+  await assertNoClientErrors();
+});
+
+test('indicator details stay readable without overflow across QA viewports', async ({ page }, testInfo) => {
+  const assertNoClientErrors = expectNoClientErrors(page);
+  const measurements: Array<{ viewport: string; overflow: number; dialogWidth: number; dialogHeight: number }> = [];
+  await page.route('**/api/signals', (route) => route.fulfill({ json: payload }));
+
+  for (const viewport of qaViewports) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: /비트코인 시그널/i })).toBeVisible();
+    const rsiCard = page.getByRole('button', { name: /RSI \(14\).*28\.00.*20\/20/i });
+    await rsiCard.click();
+    const dialog = page.getByRole('dialog', { name: 'RSI (14) 상세 설명' });
+    await expect(dialog).toContainText('RSI는 최근 상승폭과 하락폭의 상대 강도를 비교');
+    await expect(dialog).toContainText('현재 대시보드는 14기간 종가 변화로 RSI(14)를 계산합니다.');
+    await expect(dialog).toContainText('RSI 30 이하는 과매도 구간으로 높은 점수를');
+    await expect(dialog).toContainText('Binance 현물 캔들 종가를 사용합니다.');
+    await expect(dialog).toContainText('RSI는 방향 전환 확정 신호가 아니며');
+    await expect(dialog).toContainText('보조지표이며 단독 매수·매도 판단 근거가 아닙니다.');
+    await expect(dialog).toContainText('20/20점');
+    await expect(dialog).toContainText('25.0점');
+    const overflow = await expectNoHorizontalOverflow(page);
+    const dialogBox = await dialog.boundingBox();
+    expect(dialogBox?.x).toBeGreaterThanOrEqual(0);
+    expect(dialogBox?.width).toBeLessThanOrEqual(viewport.width);
+    expect(dialogBox?.height).toBeLessThanOrEqual(Math.ceil(viewport.height * 0.9));
+    measurements.push({ viewport: `${viewport.width}x${viewport.height}`, overflow, dialogWidth: Math.round(dialogBox?.width ?? 0), dialogHeight: Math.round(dialogBox?.height ?? 0) });
+    await testInfo.attach(`indicator-detail-${viewport.name}`, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(rsiCard).toBeFocused();
+  }
+
+  await testInfo.attach('indicator-detail-overflow-measurements', { body: JSON.stringify(measurements, null, 2), contentType: 'application/json' });
   await assertNoClientErrors();
 });
 

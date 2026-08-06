@@ -103,6 +103,49 @@ describe('dashboard behavior', () => {
     expect(within(ethereumMeter).getByText('관망')).toHaveClass('text-amber-100');
   });
 
+  it('opens accessible indicator details by pointer and closes with Escape while restoring focus', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => okPayload }));
+
+    render(createElement(Home));
+    await screen.findByRole('heading', { name: /비트코인 시그널/i });
+
+    const rsiCard = screen.getByRole('button', { name: /RSI \(14\).*28\.00.*30\/30/i });
+    await userEvent.click(rsiCard);
+
+    const dialog = screen.getByRole('dialog', { name: 'RSI (14) 상세 설명' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveTextContent('무엇을 보는 지표인가요?');
+    expect(dialog).toHaveTextContent('현재 대시보드 계산 방식');
+    expect(dialog).toHaveTextContent('현재 값과 배점');
+    expect(dialog).toHaveTextContent('28.00');
+    expect(dialog).toHaveTextContent('30/30점');
+    expect(dialog).toHaveTextContent('보조지표이며 단독 매수·매도 판단 근거가 아닙니다.');
+
+    await userEvent.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(rsiCard).toHaveFocus();
+  });
+
+  it('opens indicator details with keyboard and resets stale detail content after switching assets', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => okPayload }));
+
+    render(createElement(Home));
+    await screen.findByRole('heading', { name: /비트코인 시그널/i });
+
+    const futuresCard = screen.getByRole('button', { name: /선물 펀딩비·미체결약정.*-0\.0010%.*20\/20/i });
+    futuresCard.focus();
+    await userEvent.keyboard('{Enter}');
+
+    expect(screen.getByRole('dialog', { name: '선물 펀딩비·미체결약정 상세 설명' })).toHaveTextContent('-0.0010% / OI 2.00%');
+
+    await userEvent.click(screen.getByRole('tab', { name: /eth.*이더리움/i }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: /이더리움 시그널/i })).toBeInTheDocument();
+    expect(screen.queryByText('-0.0010% / OI 2.00%')).not.toBeInTheDocument();
+  });
+
   it('uses red for sell signal tags and the score gauge', async () => {
     const sellPayload = {
       ...okPayload,
