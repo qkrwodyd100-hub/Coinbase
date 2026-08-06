@@ -66,6 +66,7 @@ const okPayload = {
 describe('dashboard behavior', () => {
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
     vi.restoreAllMocks();
     vi.useRealTimers();
     vi.unstubAllGlobals();
@@ -262,5 +263,63 @@ describe('dashboard behavior', () => {
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /비트코인 시그널/i })).toBeInTheDocument();
+  });
+
+  it('shows Korean alert controls and only asks browser notification permission after an explicit click', async () => {
+    const requestPermission = vi.fn().mockResolvedValue('granted');
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => okPayload }));
+
+    render(createElement(Home));
+    await screen.findByRole('heading', { name: /비트코인 시그널/i });
+
+    expect(screen.getByRole('heading', { name: '극단 시그널 알람' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '브라우저 알림 허용' })).toBeInTheDocument();
+    expect(requestPermission).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: '브라우저 알림 허용' }));
+
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/브라우저 알림 권한이 허용되었습니다/)).toBeInTheDocument();
+  });
+
+  it('creates in-app alert history from a manual threshold re-entry and keeps it after refresh', async () => {
+    const initialPayload = { ...okPayload, assets: okPayload.assets.map((asset) => (asset.symbol === 'BTC' ? { ...asset, overallScore: 79, signal: { label: '매수', tone: 'positive' } } : asset)) };
+    const crossedPayload = { ...okPayload, asOf: '2026-08-05T00:01:00.000Z', assets: okPayload.assets.map((asset) => (asset.symbol === 'BTC' ? { ...asset, overallScore: 82, signal: { label: '강력 매수', tone: 'positive' } } : asset)) };
+    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => initialPayload }).mockResolvedValueOnce({ ok: true, json: async () => crossedPayload });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(createElement(Home));
+    await screen.findByRole('heading', { name: /비트코인 시그널/i });
+    await userEvent.click(screen.getByRole('button', { name: /시그널 새로고침/i }));
+
+    const alert = await screen.findByRole('status', { name: /실시간 극단 시그널 알림/i });
+    expect(alert).toHaveTextContent('🚨 [강력 매수 시그널] BTC 종합 점수 82점 달성!');
+    expect(alert).toHaveTextContent('적극적인 분할 매수 타점입니다.');
+    expect(screen.getByRole('list', { name: '최근 극단 시그널 알람 이력' })).toHaveTextContent('BTC 종합 점수 82점 달성');
+
+    cleanup();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => crossedPayload }));
+    render(createElement(Home));
+
+    expect(await screen.findByRole('list', { name: '최근 극단 시그널 알람 이력' })).toHaveTextContent('BTC 종합 점수 82점 달성');
+  });
+
+  it('does not repeat alerts while disabled or while the score remains in the same extreme zone', async () => {
+    const firstExtreme = { ...okPayload, assets: okPayload.assets.map((asset) => (asset.symbol === 'BTC' ? { ...asset, overallScore: 81, signal: { label: '강력 매수', tone: 'positive' } } : asset)) };
+    const stillExtreme = { ...okPayload, asOf: '2026-08-05T00:01:00.000Z', assets: okPayload.assets.map((asset) => (asset.symbol === 'BTC' ? { ...asset, overallScore: 84, signal: { label: '강력 매수', tone: 'positive' } } : asset)) };
+    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => okPayload }).mockResolvedValueOnce({ ok: true, json: async () => firstExtreme }).mockResolvedValueOnce({ ok: true, json: async () => stillExtreme });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(createElement(Home));
+    await screen.findByRole('heading', { name: /비트코인 시그널/i });
+    await userEvent.click(screen.getByRole('switch', { name: '극단 시그널 알람 활성화' }));
+    await userEvent.click(screen.getByRole('button', { name: /시그널 새로고침/i }));
+
+    expect(screen.queryByRole('status', { name: /실시간 극단 시그널 알림/i })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('switch', { name: '극단 시그널 알람 활성화' }));
+    await userEvent.click(screen.getByRole('button', { name: /시그널 새로고침/i }));
+    expect(screen.queryByRole('status', { name: /실시간 극단 시그널 알림/i })).not.toBeInTheDocument();
   });
 });

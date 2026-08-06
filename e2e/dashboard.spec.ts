@@ -251,3 +251,33 @@ test('dashboard surfaces stale API payloads and FX fallback states', async ({ pa
   await expect(page.getByText(/원화 환산을 잠시 표시할 수 없습니다/i)).toBeVisible();
   await expect(page.getByRole('tab', { name: /btc.*비트코인/i }).getByText('$65,000')).toBeVisible();
 });
+
+test('manual refresh creates an in-app extreme signal alert and preserves mobile layout', async ({ page }) => {
+  const assertNoClientErrors = expectNoClientErrors(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const initialPayload = {
+    ...payload,
+    assets: payload.assets.map((asset) => (asset.symbol === 'BTC' ? { ...asset, overallScore: 79, signal: { label: '매수', tone: 'positive' } } : asset)),
+  };
+  const crossedPayload = {
+    ...payload,
+    asOf: '2026-08-05T00:01:00.000Z',
+    assets: payload.assets.map((asset) => (asset.symbol === 'BTC' ? { ...asset, overallScore: 82, signal: { label: '강력 매수', tone: 'positive' } } : asset)),
+  };
+  let afterInitialRender = false;
+  await page.route('**/api/signals', (route) => {
+    return route.fulfill({ json: afterInitialRender ? crossedPayload : initialPayload });
+  });
+
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: /극단 시그널 알람/i })).toBeVisible();
+  afterInitialRender = true;
+  await page.getByRole('button', { name: /시그널 새로고침/i }).click();
+
+  const alert = page.getByRole('status', { name: /실시간 극단 시그널 알림/i });
+  await expect(alert).toContainText('🚨 [강력 매수 시그널] BTC 종합 점수 82점 달성!');
+  await expect(alert).toContainText('적극적인 분할 매수 타점입니다.');
+  await expect(page.getByRole('list', { name: '최근 극단 시그널 알람 이력' })).toContainText('BTC 종합 점수 82점 달성');
+  await expectNoHorizontalOverflow(page);
+  await assertNoClientErrors();
+});

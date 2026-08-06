@@ -1,18 +1,50 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  evaluateExtremeSignalAlerts,
+  parseStoredAlertState,
+  serializeAlertState,
+  type ExtremeSignalAlert,
+  type ExtremeSignalAlertState,
+} from '@/lib/alerts';
 import { formatUsdWithKrw, type AssetSignal, type DashboardPayload, type SignalTone } from '@/lib/signals';
 
 type LoadState = 'loading' | 'refreshing' | 'success' | 'failure';
 
 const REFRESH_INTERVAL_MS = 60_000;
+const ALERT_STATE_STORAGE_KEY = 'crypto-signal-dashboard:extreme-alert-state';
+const ALERT_HISTORY_STORAGE_KEY = 'crypto-signal-dashboard:extreme-alert-history';
+const ALERT_ENABLED_STORAGE_KEY = 'crypto-signal-dashboard:extreme-alert-enabled';
+const MAX_ALERT_HISTORY = 10;
 
 export default function Home() {
   const [payload, setPayload] = useState<DashboardPayload | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<'BTC' | 'ETH'>('BTC');
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [alertsEnabled, setAlertsEnabled] = useState(() => readStoredBoolean(ALERT_ENABLED_STORAGE_KEY, true));
+  const [alertState, setAlertState] = useState<ExtremeSignalAlertState>(() => readStoredAlertState());
+  const [alertHistory, setAlertHistory] = useState<ExtremeSignalAlert[]>(() => readStoredAlertHistory());
+  const [latestAlert, setLatestAlert] = useState<ExtremeSignalAlert | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(() => getNotificationPermission());
   const requestGeneration = useRef(0);
+  const alertStateRef = useRef(alertState);
+  const alertsEnabledRef = useRef(alertsEnabled);
+
+  useEffect(() => {
+    alertStateRef.current = alertState;
+    safeLocalStorageSet(ALERT_STATE_STORAGE_KEY, serializeAlertState(alertState));
+  }, [alertState]);
+
+  useEffect(() => {
+    alertsEnabledRef.current = alertsEnabled;
+    safeLocalStorageSet(ALERT_ENABLED_STORAGE_KEY, alertsEnabled ? 'true' : 'false');
+  }, [alertsEnabled]);
+
+  useEffect(() => {
+    safeLocalStorageSet(ALERT_HISTORY_STORAGE_KEY, JSON.stringify(alertHistory));
+  }, [alertHistory]);
 
   const refreshSignals = useCallback(async () => {
     const generation = requestGeneration.current + 1;
@@ -27,7 +59,15 @@ export default function Home() {
       }
       const nextPayload = (await response.json()) as DashboardPayload;
       if (generation !== requestGeneration.current) return;
+      const alertResult = evaluateExtremeSignalAlerts({ assets: nextPayload.assets, previousState: alertStateRef.current, now: Date.now() });
+      alertStateRef.current = alertResult.nextState;
       setPayload(nextPayload);
+      setAlertState(alertResult.nextState);
+      if (alertsEnabledRef.current && alertResult.alerts.length > 0) {
+        setLatestAlert(alertResult.alerts[0]);
+        setAlertHistory((current) => [...alertResult.alerts, ...current].slice(0, MAX_ALERT_HISTORY));
+        showBrowserNotifications(alertResult.alerts);
+      }
       setLoadState('success');
       setSelectedSymbol((current) => (nextPayload.assets.some((asset) => asset.symbol === current) ? current : (nextPayload.assets[0]?.symbol ?? 'BTC')));
     } catch (refreshError) {
@@ -48,6 +88,15 @@ export default function Home() {
 
     return () => window.clearInterval(interval);
   }, [refreshSignals]);
+
+  const requestBrowserNotifications = useCallback(async () => {
+    if (!('Notification' in window)) {
+      setNotificationPermission('unsupported');
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+  }, []);
 
   const selectedAsset = useMemo(
     () => payload?.assets.find((asset) => asset.symbol === selectedSymbol) ?? payload?.assets[0] ?? null,
@@ -97,6 +146,8 @@ export default function Home() {
           </p>
         ) : null}
 
+        {latestAlert ? <InAppAlert alert={latestAlert} /> : null}
+
         {!selectedAsset && loadState === 'loading' ? <DashboardSkeleton /> : null}
         {selectedAsset ? (
           <DashboardContent
@@ -107,6 +158,11 @@ export default function Home() {
             stale={hasStaleData || selectedAsset.stale}
             usdKrwRate={payload?.usdKrwRate ?? null}
             backtestSummary={payload?.backtestSummary ?? null}
+            alertsEnabled={alertsEnabled}
+            onToggleAlerts={setAlertsEnabled}
+            notificationPermission={notificationPermission}
+            onRequestBrowserNotifications={requestBrowserNotifications}
+            alertHistory={alertHistory}
           />
         ) : null}
       </section>
@@ -122,6 +178,11 @@ function DashboardContent({
   stale,
   usdKrwRate,
   backtestSummary,
+  alertsEnabled,
+  onToggleAlerts,
+  notificationPermission,
+  onRequestBrowserNotifications,
+  alertHistory,
 }: {
   assets: AssetSignal[];
   selectedAsset: AssetSignal;
@@ -130,6 +191,11 @@ function DashboardContent({
   stale: boolean;
   usdKrwRate: number | null;
   backtestSummary: DashboardPayload['backtestSummary'] | null;
+  alertsEnabled: boolean;
+  onToggleAlerts: (enabled: boolean) => void;
+  notificationPermission: NotificationPermission | 'unsupported';
+  onRequestBrowserNotifications: () => void;
+  alertHistory: ExtremeSignalAlert[];
 }) {
   return (
     <div className="grid min-w-0 flex-1 gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
@@ -164,6 +230,13 @@ function DashboardContent({
             지표 결측은 0점이나 만점으로 숨기지 않고 사용 가능한 가중치만 100점으로 정규화합니다. ETH는 기본 점수 95%와 ETH/BTC 상대강도 5%를 혼합합니다.
           </p>
         </div>
+        <AlertSettings
+          enabled={alertsEnabled}
+          onToggle={onToggleAlerts}
+          notificationPermission={notificationPermission}
+          onRequestBrowserNotifications={onRequestBrowserNotifications}
+          history={alertHistory}
+        />
         {backtestSummary ? <BacktestSummary summary={backtestSummary} /> : null}
       </aside>
 
@@ -247,6 +320,81 @@ function ScoreGauge({ assetName, score, tone, label }: { assetName: string; scor
   );
 }
 
+function AlertSettings({
+  enabled,
+  onToggle,
+  notificationPermission,
+  onRequestBrowserNotifications,
+  history,
+}: {
+  enabled: boolean;
+  onToggle: (enabled: boolean) => void;
+  notificationPermission: NotificationPermission | 'unsupported';
+  onRequestBrowserNotifications: () => void;
+  history: ExtremeSignalAlert[];
+}) {
+  return (
+    <section className="min-w-0 rounded-3xl border border-cyan-200/20 bg-cyan-200/[0.07] p-5 text-sm leading-6 text-slate-200">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="font-bold text-slate-100">극단 시그널 알람</h2>
+          <p className="mt-1 text-slate-300">80점 이상 재진입과 20점 이하 재진입을 BTC/ETH별로 감시합니다.</p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          aria-label="극단 시그널 알람 활성화"
+          onClick={() => onToggle(!enabled)}
+          className={`rounded-full px-4 py-2 text-xs font-black transition ${enabled ? 'bg-emerald-300 text-slate-950' : 'bg-slate-700 text-slate-200'}`}
+        >
+          {enabled ? '알람 켜짐' : '알람 꺼짐'}
+        </button>
+      </div>
+
+      <div className="mt-4 rounded-2xl bg-black/20 p-3">
+        <p className="font-semibold text-slate-100">브라우저 알림</p>
+        <p className="mt-1 text-slate-300">권한을 거부하거나 지원하지 않아도 인앱 알림과 이력은 계속 동작합니다.</p>
+        {notificationPermission === 'default' ? (
+          <button type="button" onClick={onRequestBrowserNotifications} className="mt-3 rounded-2xl bg-cyan-300 px-4 py-2 text-xs font-black text-slate-950">
+            브라우저 알림 허용
+          </button>
+        ) : (
+          <p className="mt-2 text-xs text-cyan-100">{notificationPermissionText(notificationPermission)}</p>
+        )}
+      </div>
+
+      <div className="mt-4">
+        <h3 className="font-semibold text-slate-100">최근 알람 이력</h3>
+        {history.length > 0 ? (
+          <ul aria-label="최근 극단 시그널 알람 이력" className="mt-2 space-y-2">
+            {history.map((alert) => (
+              <li key={`${alert.assetSymbol}-${alert.type}-${alert.createdAt}`} className="min-w-0 break-words rounded-2xl bg-black/20 p-3">
+                <span className="font-bold text-slate-100">{alert.title.replace(/^🚨 \[강력 매수 시그널\] |^⚠️ \[강력 매도 시그널\] /, '')}</span>
+                <span className="block text-xs text-slate-400">{new Date(alert.createdAt).toLocaleTimeString('ko-KR', { hour12: false })}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-slate-400">아직 발생한 극단 시그널 알람이 없습니다.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function InAppAlert({ alert }: { alert: ExtremeSignalAlert }) {
+  const isBuy = alert.type === 'strong-buy';
+  const className = isBuy ? 'border-emerald-300/40 bg-emerald-300/15 text-emerald-50' : 'border-rose-300/40 bg-rose-300/15 text-rose-50';
+  return (
+    <section role="status" aria-label="실시간 극단 시그널 알림" className={`mb-5 min-w-0 rounded-3xl border p-4 text-sm leading-6 shadow-lg ${className}`}>
+      <h2 className="break-words text-lg font-black">{alert.title}</h2>
+      <p className="mt-2 break-words">세부: {alert.details}</p>
+      <p className="mt-1 break-words">권장 행동: {alert.recommendedAction}</p>
+    </section>
+  );
+}
+
 function BacktestSummary({ summary }: { summary: NonNullable<DashboardPayload['backtestSummary']> }) {
   return (
     <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-5 text-sm leading-6 text-slate-300">
@@ -296,5 +444,69 @@ function DashboardSkeleton() {
       </div>
       <div className="h-[34rem] animate-pulse rounded-[2rem] bg-white/10" />
     </div>
+  );
+}
+
+function notificationPermissionText(permission: NotificationPermission | 'unsupported'): string {
+  if (permission === 'granted') return '브라우저 알림 권한이 허용되었습니다.';
+  if (permission === 'denied') return '브라우저 알림 권한이 거부되었습니다. 인앱 알림은 계속 표시됩니다.';
+  return '이 브라우저는 Notification API를 지원하지 않습니다. 인앱 알림은 계속 표시됩니다.';
+}
+
+function getNotificationPermission(): NotificationPermission | 'unsupported' {
+  if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
+  return Notification.permission;
+}
+
+function readStoredAlertState(): ExtremeSignalAlertState {
+  if (typeof window === 'undefined') return {};
+  return parseStoredAlertState(window.localStorage.getItem(ALERT_STATE_STORAGE_KEY));
+}
+
+function readStoredAlertHistory(): ExtremeSignalAlert[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(ALERT_HISTORY_STORAGE_KEY) ?? '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isStoredAlert).slice(0, MAX_ALERT_HISTORY);
+  } catch {
+    return [];
+  }
+}
+
+function readStoredBoolean(key: string, fallback: boolean): boolean {
+  if (typeof window === 'undefined') return fallback;
+  const value = window.localStorage.getItem(key);
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return fallback;
+}
+
+function safeLocalStorageSet(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures so in-app alerts keep working for the current page.
+  }
+}
+
+function showBrowserNotifications(alerts: ExtremeSignalAlert[]) {
+  if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted' || typeof Notification !== 'function') return;
+  for (const alert of alerts) {
+    new Notification(alert.title, { body: `${alert.details}\n${alert.recommendedAction}` });
+  }
+}
+
+function isStoredAlert(value: unknown): value is ExtremeSignalAlert {
+  if (typeof value !== 'object' || value === null) return false;
+  const alert = value as Partial<ExtremeSignalAlert>;
+  return (
+    (alert.assetSymbol === 'BTC' || alert.assetSymbol === 'ETH') &&
+    (alert.type === 'strong-buy' || alert.type === 'strong-sell') &&
+    typeof alert.score === 'number' &&
+    typeof alert.createdAt === 'number' &&
+    typeof alert.title === 'string' &&
+    typeof alert.details === 'string' &&
+    typeof alert.recommendedAction === 'string'
   );
 }
