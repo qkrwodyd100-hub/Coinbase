@@ -305,6 +305,45 @@ describe('dashboard behavior', () => {
     expect(await screen.findByRole('list', { name: '최근 극단 시그널 알람 이력' })).toHaveTextContent('BTC 종합 점수 82점 달성');
   });
 
+  it.each([
+    ['denied permission', 'denied' as NotificationPermission],
+    ['unsupported Notification API', 'unsupported' as const],
+  ])('keeps in-app alerts and history when browser notifications are %s', async (_label, permission) => {
+    if (permission === 'unsupported') {
+      Reflect.deleteProperty(window, 'Notification');
+    } else {
+      class FakeNotification {}
+      Object.defineProperty(FakeNotification, 'permission', { value: permission, configurable: true });
+      vi.stubGlobal('Notification', FakeNotification);
+    }
+    const initialPayload = { ...okPayload, assets: okPayload.assets.map((asset) => (asset.symbol === 'ETH' ? { ...asset, overallScore: 21, signal: { label: '매도', tone: 'negative' } } : asset)) };
+    const crossedPayload = { ...okPayload, asOf: '2026-08-05T00:01:00.000Z', assets: okPayload.assets.map((asset) => (asset.symbol === 'ETH' ? { ...asset, overallScore: 20, signal: { label: '강력 매도', tone: 'negative' } } : asset)) };
+    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => initialPayload }).mockResolvedValueOnce({ ok: true, json: async () => crossedPayload });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(createElement(Home));
+    await screen.findByRole('heading', { name: /비트코인 시그널/i });
+    await userEvent.click(screen.getByRole('button', { name: /시그널 새로고침/i }));
+
+    const alert = await screen.findByRole('status', { name: /실시간 극단 시그널 알림/i });
+    expect(alert).toHaveTextContent('⚠️ [강력 매도 시그널] ETH 종합 점수 20점 하락!');
+    expect(alert).toHaveTextContent('수익 중이라면 즉시 분할 익절 또는 현금화를 권장합니다.');
+    expect(screen.getByRole('list', { name: '최근 극단 시그널 알람 이력' })).toHaveTextContent('ETH 종합 점수 20점 하락');
+  });
+
+  it('recovers from corrupted alert localStorage and replaces it with parseable state on the first refresh', async () => {
+    window.localStorage.setItem('crypto-signal-dashboard:extreme-alert-state', '{bad json');
+    window.localStorage.setItem('crypto-signal-dashboard:extreme-alert-history', '{bad json');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => okPayload }));
+
+    render(createElement(Home));
+    await screen.findByRole('heading', { name: /비트코인 시그널/i });
+
+    expect(screen.getByText('아직 발생한 극단 시그널 알람이 없습니다.')).toBeInTheDocument();
+    expect(() => JSON.parse(window.localStorage.getItem('crypto-signal-dashboard:extreme-alert-state') ?? '')).not.toThrow();
+    expect(() => JSON.parse(window.localStorage.getItem('crypto-signal-dashboard:extreme-alert-history') ?? '')).not.toThrow();
+  });
+
   it('does not repeat alerts while disabled or while the score remains in the same extreme zone', async () => {
     const firstExtreme = { ...okPayload, assets: okPayload.assets.map((asset) => (asset.symbol === 'BTC' ? { ...asset, overallScore: 81, signal: { label: '강력 매수', tone: 'positive' } } : asset)) };
     const stillExtreme = { ...okPayload, asOf: '2026-08-05T00:01:00.000Z', assets: okPayload.assets.map((asset) => (asset.symbol === 'BTC' ? { ...asset, overallScore: 84, signal: { label: '강력 매수', tone: 'positive' } } : asset)) };

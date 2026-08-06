@@ -76,6 +76,53 @@ describe('extreme signal alert decisions', () => {
     expect(reentered.alerts).toHaveLength(1);
   });
 
+  it.each(['BTC', 'ETH'] as const)('validates %s strong-buy crossing, sustained zone silence, cooldown, and re-entry', (symbol) => {
+    const baseline = evaluateExtremeSignalAlerts({ assets: [asset(symbol, 79)], previousState: {}, now: 1_000 });
+    const crossed = evaluateExtremeSignalAlerts({ assets: [asset(symbol, 80)], previousState: baseline.nextState, now: 2_000 });
+    const exitedBeforeCooldown = evaluateExtremeSignalAlerts({ assets: [asset(symbol, 79)], previousState: crossed.nextState, now: 61_000 });
+    const reenteredBeforeCooldown = evaluateExtremeSignalAlerts({ assets: [asset(symbol, 80)], previousState: exitedBeforeCooldown.nextState, now: 121_000 });
+    const sustainedAfterCooldown = evaluateExtremeSignalAlerts({ assets: [asset(symbol, 85)], previousState: crossed.nextState, now: 2_000 + ALERT_COOLDOWN_MS + 1 });
+    const exited = evaluateExtremeSignalAlerts({ assets: [asset(symbol, 79)], previousState: sustainedAfterCooldown.nextState, now: 2_000 + ALERT_COOLDOWN_MS + 61_000 });
+    const reenteredAfterCooldown = evaluateExtremeSignalAlerts({ assets: [asset(symbol, 80)], previousState: exited.nextState, now: 2_000 + ALERT_COOLDOWN_MS + 121_000 });
+
+    expect(baseline.alerts).toEqual([]);
+    expect(crossed.alerts).toHaveLength(1);
+    expect(crossed.alerts[0]).toMatchObject({ assetSymbol: symbol, type: 'strong-buy', score: 80 });
+    expect(sustainedAfterCooldown.alerts).toEqual([]);
+    expect(reenteredBeforeCooldown.alerts).toEqual([]);
+    expect(reenteredAfterCooldown.alerts).toHaveLength(1);
+    expect(reenteredAfterCooldown.alerts[0]).toMatchObject({ assetSymbol: symbol, type: 'strong-buy', score: 80 });
+  });
+
+  it.each(['BTC', 'ETH'] as const)('validates %s strong-sell crossing, sustained zone silence, cooldown, and re-entry', (symbol) => {
+    const baseline = evaluateExtremeSignalAlerts({ assets: [asset(symbol, 21)], previousState: {}, now: 1_000 });
+    const crossed = evaluateExtremeSignalAlerts({ assets: [asset(symbol, 20)], previousState: baseline.nextState, now: 2_000 });
+    const exitedBeforeCooldown = evaluateExtremeSignalAlerts({ assets: [asset(symbol, 21)], previousState: crossed.nextState, now: 61_000 });
+    const reenteredBeforeCooldown = evaluateExtremeSignalAlerts({ assets: [asset(symbol, 20)], previousState: exitedBeforeCooldown.nextState, now: 121_000 });
+    const sustainedAfterCooldown = evaluateExtremeSignalAlerts({ assets: [asset(symbol, 15)], previousState: crossed.nextState, now: 2_000 + ALERT_COOLDOWN_MS + 1 });
+    const exited = evaluateExtremeSignalAlerts({ assets: [asset(symbol, 21)], previousState: sustainedAfterCooldown.nextState, now: 2_000 + ALERT_COOLDOWN_MS + 61_000 });
+    const reenteredAfterCooldown = evaluateExtremeSignalAlerts({ assets: [asset(symbol, 20)], previousState: exited.nextState, now: 2_000 + ALERT_COOLDOWN_MS + 121_000 });
+
+    expect(baseline.alerts).toEqual([]);
+    expect(crossed.alerts).toHaveLength(1);
+    expect(crossed.alerts[0]).toMatchObject({ assetSymbol: symbol, type: 'strong-sell', score: 20 });
+    expect(sustainedAfterCooldown.alerts).toEqual([]);
+    expect(reenteredBeforeCooldown.alerts).toEqual([]);
+    expect(reenteredAfterCooldown.alerts).toHaveLength(1);
+    expect(reenteredAfterCooldown.alerts[0]).toMatchObject({ assetSymbol: symbol, type: 'strong-sell', score: 20 });
+  });
+
+  it('keeps opposite alert types independent for the same asset during cooldown', () => {
+    const previousState: ExtremeSignalAlertState = {
+      BTC: { previousScore: 21, lastSentAt: { 'strong-buy': 10_000 } },
+    };
+
+    const result = evaluateExtremeSignalAlerts({ assets: [asset('BTC', 20)], previousState, now: 10_000 + ALERT_COOLDOWN_MS - 1 });
+
+    expect(result.alerts).toHaveLength(1);
+    expect(result.alerts[0]).toMatchObject({ assetSymbol: 'BTC', type: 'strong-sell', score: 20 });
+  });
+
   it('ignores corrupted local storage state and serializes a recoverable state', () => {
     expect(parseStoredAlertState('{bad json')).toEqual({});
     expect(parseStoredAlertState('{"BTC":{"previousScore":"oops"}}')).toEqual({});
