@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runBacktest, summarizeBacktest } from '@/lib/backtest';
+import { closedCandleBoundary, runBacktest, summarizeBacktest, valueForUtcDate } from '@/lib/backtest';
 
 const hour = 60 * 60 * 1000;
 const day = 24 * hour;
@@ -16,6 +16,23 @@ function candle(index: number, close: number) {
 }
 
 describe('backtest event aggregation', () => {
+  it('uses an interval-specific closed-candle boundary', () => {
+    const time = Date.UTC(2026, 7, 6, 10, 30);
+
+    expect(closedCandleBoundary(time, '4h')).toBe(Date.UTC(2026, 7, 6, 8));
+    expect(closedCandleBoundary(time, '1d')).toBe(Date.UTC(2026, 7, 6, 0));
+  });
+
+  it('does not carry a stale daily Fear & Greed value across a missing UTC date', () => {
+    const rows = [
+      { date: '2026-08-04', value: 20 },
+      { date: '2026-08-06', value: 40 },
+    ];
+
+    expect(valueForUtcDate(rows, Date.UTC(2026, 7, 5, 12))).toBeUndefined();
+    expect(valueForUtcDate(rows, Date.UTC(2026, 7, 6, 12))).toBe(40);
+  });
+
   it('counts only new entries into an extreme signal band and uses the next observable open as entry', () => {
     const scored = [
       { candle: candle(0, 100), score: 79 },
@@ -27,9 +44,9 @@ describe('backtest event aggregation', () => {
       { candle: candle(6, 99), score: 24 },
     ];
 
-    const result = runBacktest({ asset: 'BTC', interval: '4h', horizonMs: 24 * hour, scoredCandles: scored });
+    const result = runBacktest({ asset: 'BTC', interval: '4h', horizonMs: 8 * hour, scoredCandles: scored });
 
-    expect(result.lookAheadRule).toContain('next closed candle open');
+    expect(result.lookAheadRule).toContain('next candle open');
     expect(result.signals).toHaveLength(2);
     expect(result.signals[0]).toMatchObject({ type: 'strong-buy', signalOpenTime: 4 * hour, entryOpenTime: 8 * hour, success: true });
     expect(result.signals[1]).toMatchObject({ type: 'strong-sell', signalOpenTime: 16 * hour, entryOpenTime: 20 * hour, success: true });
@@ -46,6 +63,11 @@ describe('backtest event aggregation', () => {
         { candle: { ...candle(2, 106), openTime: 2 * day }, score: 19 },
         { candle: { ...candle(3, 102), openTime: 3 * day }, score: 22 },
         { candle: { ...candle(4, 96), openTime: 4 * day }, score: 25 },
+        { candle: { ...candle(5, 97), openTime: 5 * day }, score: 25 },
+        { candle: { ...candle(6, 95), openTime: 6 * day }, score: 25 },
+        { candle: { ...candle(7, 94), openTime: 7 * day }, score: 25 },
+        { candle: { ...candle(8, 93), openTime: 8 * day }, score: 25 },
+        { candle: { ...candle(9, 92), openTime: 9 * day }, score: 25 },
       ],
     });
 
@@ -58,9 +80,9 @@ describe('backtest event aggregation', () => {
         signalCount: 1,
         hitCount: 1,
         hitRatePercent: 100,
-        averageCloseReturnPercent: -6.8,
+        averageCloseReturnPercent: -8.74,
         averageMaxFavorablePercent: 3.88,
-        averageMaxAdversePercent: -8.74,
+        averageMaxAdversePercent: -10.68,
       }),
       expect.objectContaining({
         asset: 'ETH',
@@ -68,8 +90,8 @@ describe('backtest event aggregation', () => {
         signalCount: 1,
         hitCount: 1,
         hitRatePercent: 100,
-        averageCloseReturnPercent: -4.95,
-        averageMaxFavorablePercent: 6.93,
+        averageCloseReturnPercent: -8.91,
+        averageMaxFavorablePercent: 10.89,
         averageMaxAdversePercent: -1.98,
       }),
     ]);
@@ -93,5 +115,17 @@ describe('backtest event aggregation', () => {
 
     expect(result.signals).toHaveLength(1);
     expect(result.signals[0]).toMatchObject({ entryOpenTime: 4 * hour, entryPrice: 100, success: false, maxFavorablePercent: 2 });
+  });
+
+  it('excludes an extreme signal when the full forward horizon is not available', () => {
+    const scored = Array.from({ length: 4 }, (_, index) => ({
+      candle: candle(index, 100 + index),
+      score: index === 0 ? 82 : 45,
+    }));
+
+    const result = runBacktest({ asset: 'BTC', interval: '4h', horizonMs: 24 * hour, scoredCandles: scored });
+
+    expect(result.signals).toHaveLength(0);
+    expect(result.excludedSignals).toBe(1);
   });
 });

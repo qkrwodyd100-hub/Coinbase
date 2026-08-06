@@ -41,6 +41,7 @@ export function runBacktest(input: { asset: 'BTC' | 'ETH'; interval: '4h' | '1d'
   const signals: BacktestSignal[] = [];
   let previousType: BacktestSignalType | null = null;
   let excludedSignals = 0;
+  const candleDurationMs = input.interval === '4h' ? 4 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
 
   for (let index = 0; index < input.scoredCandles.length; index += 1) {
     const current = input.scoredCandles[index];
@@ -60,7 +61,13 @@ export function runBacktest(input: { asset: 'BTC' | 'ETH'; interval: '4h' | '1d'
 
     const horizonEnd = entry.candle.openTime + input.horizonMs;
     const evaluationCandles = input.scoredCandles.slice(index + 1).filter((item) => item.candle.openTime < horizonEnd);
-    if (evaluationCandles.length === 0) {
+    const hasCompleteHorizon =
+      evaluationCandles.length > 0 &&
+      evaluationCandles.every(
+        (item, evaluationIndex) => item.candle.openTime === entry.candle.openTime + evaluationIndex * candleDurationMs,
+      ) &&
+      evaluationCandles.at(-1)!.candle.openTime + candleDurationMs === horizonEnd;
+    if (!hasCompleteHorizon) {
       excludedSignals += 1;
       previousType = type;
       continue;
@@ -74,7 +81,8 @@ export function runBacktest(input: { asset: 'BTC' | 'ETH'; interval: '4h' | '1d'
     asset: input.asset,
     interval: input.interval,
     horizonMs: input.horizonMs,
-    lookAheadRule: 'Score is calculated after a candle closes; entry uses the next closed candle open/first observable next bar price to avoid look-ahead bias.',
+    lookAheadRule:
+      'Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded.',
     signals,
     excludedSignals,
     dataStart: input.scoredCandles[0]?.candle.openTime ?? null,
@@ -113,6 +121,16 @@ export function summarizeBacktest(results: BacktestResult[]): BacktestSummary {
       'Fear & Greed is daily and is forward-filled for 4h candles by UTC date.',
     ],
   };
+}
+
+export function closedCandleBoundary(time: number, interval: '4h' | '1d'): number {
+  const intervalMs = interval === '4h' ? 4 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+  return Math.floor(time / intervalMs) * intervalMs;
+}
+
+export function valueForUtcDate(rows: Array<{ date: string; value: number }>, time: number): number | undefined {
+  const date = new Date(time).toISOString().slice(0, 10);
+  return rows.find((row) => row.date === date)?.value;
 }
 
 function evaluateSignal(

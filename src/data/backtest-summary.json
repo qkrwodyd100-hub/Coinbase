@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-06T03:12:54.119Z",
+  "generatedAt": "2026-08-06T03:50:56.535Z",
   "rows": [
     {
       "asset": "BTC",
@@ -49,27 +49,30 @@
   "dataLimitations": [
     "missing indicators are explicitly excluded and available weights are normalized; full-data and limited-data results must be compared separately.",
     "public no-key data can have delayed archive files; reports include data start/end and excluded signal counts.",
-    "Fear & Greed is daily and is forward-filled for 4h candles by UTC date."
+    "Fear & Greed is daily and is forward-filled for 4h candles by UTC date.",
+    "Historical open interest is unavailable in the public no-key backtest path, so futures positioning uses funding only (10 available points) and the available indicator weights are normalized to 100."
   ],
   "source": "Binance public no-key + Alternative.me public no-key",
   "reports": [
     {
       "asset": "BTC",
       "interval": "4h",
-      "dataStart": "2025-08-14T04:00:00.000Z",
-      "dataEnd": "2026-08-05T16:00:00.000Z",
+      "dataStart": "2025-08-14T08:00:00.000Z",
+      "dataEnd": "2026-08-05T20:00:00.000Z",
       "signalCount": 2,
       "excludedSignals": 0,
-      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next closed candle open/first observable next bar price to avoid look-ahead bias."
+      "horizon": "24h",
+      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
     },
     {
       "asset": "ETH",
       "interval": "4h",
-      "dataStart": "2025-08-14T04:00:00.000Z",
-      "dataEnd": "2026-08-05T16:00:00.000Z",
+      "dataStart": "2025-08-14T08:00:00.000Z",
+      "dataEnd": "2026-08-05T20:00:00.000Z",
       "signalCount": 2,
       "excludedSignals": 0,
-      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next closed candle open/first observable next bar price to avoid look-ahead bias."
+      "horizon": "24h",
+      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
     },
     {
       "asset": "BTC",
@@ -78,7 +81,8 @@
       "dataEnd": "2026-08-05T00:00:00.000Z",
       "signalCount": 2,
       "excludedSignals": 0,
-      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next closed candle open/first observable next bar price to avoid look-ahead bias."
+      "horizon": "7d",
+      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
     },
     {
       "asset": "ETH",
@@ -87,7 +91,8 @@
       "dataEnd": "2026-08-05T00:00:00.000Z",
       "signalCount": 1,
       "excludedSignals": 0,
-      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next closed candle open/first observable next bar price to avoid look-ahead bias."
+      "horizon": "7d",
+      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
     }
   ]
 }

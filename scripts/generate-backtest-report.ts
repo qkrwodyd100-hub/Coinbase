@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { buildAssetSignal, type MarketCandle } from '../src/lib/signals.ts';
-import { runBacktest, summarizeBacktest, type ScoredCandle } from '../src/lib/backtest.ts';
+import { closedCandleBoundary, runBacktest, summarizeBacktest, valueForUtcDate, type ScoredCandle } from '../src/lib/backtest.ts';
 
 type Asset = 'BTC' | 'ETH';
 type Interval = '4h' | '1d';
@@ -32,6 +32,13 @@ const summary = summarizeBacktest(results);
 const payload = {
   ...summary,
   generatedAt: new Date().toISOString(),
+  dataLimitations:
+    mode === 'public'
+      ? [
+          ...summary.dataLimitations,
+          'Historical open interest is unavailable in the public no-key backtest path, so futures positioning uses funding only (10 available points) and the available indicator weights are normalized to 100.',
+        ]
+      : summary.dataLimitations,
   source: mode === 'fixture' ? 'deterministic fixture' : 'Binance public no-key + Alternative.me public no-key',
   reports: results.map((result) => ({
     asset: result.asset,
@@ -40,6 +47,7 @@ const payload = {
     dataEnd: result.dataEnd ? new Date(result.dataEnd).toISOString() : null,
     signalCount: result.signals.length,
     excludedSignals: result.excludedSignals,
+    horizon: result.interval === '4h' ? '24h' : '7d',
     lookAheadRule: result.lookAheadRule,
   })),
 };
@@ -49,13 +57,14 @@ await writeMarkdown(OUTPUT_MD, payload);
 console.log(JSON.stringify({ outputJson: OUTPUT_JSON, outputMarkdown: OUTPUT_MD, rows: payload.rows.length, source: payload.source }, null, 2));
 
 async function publicResults(smokeOnly: boolean) {
-  const end = floorToClosedInterval(Date.now(), 4 * 60 * 60 * 1000);
+  const now = Date.now();
   const intervals: Interval[] = smokeOnly ? ['4h'] : ['4h', '1d'];
   const assets: Asset[] = smokeOnly ? ['BTC'] : ['BTC', 'ETH'];
   const fng = await fetchFearGreed();
   const allResults = [];
 
   for (const interval of intervals) {
+    const end = closedCandleBoundary(now, interval);
     const start = end - LOOKBACKS[interval] * 24 * 60 * 60 * 1000;
     const ethBtc = await fetchKlines('ETHBTC', interval, start, end);
     for (const asset of assets) {
@@ -88,7 +97,7 @@ function scoreCandles(asset: Asset, candles: MarketCandle[], fng: FearGreedRow[]
   for (let index = 50; index < candles.length; index += 1) {
     const history = candles.slice(0, index + 1);
     const candle = candles[index];
-    const fngValue = fearGreedForTime(fng, candle.openTime);
+    const fngValue = valueForUtcDate(fng, candle.openTime);
     const fundingValue = fundingForTime(funding, candle.openTime);
     const ethHistory = ethBtc.filter((item) => item.openTime <= candle.openTime);
     const ethBtcCurrent = ethHistory.at(-1)?.close;
@@ -172,20 +181,13 @@ function parseKline(row: unknown, label: string): MarketCandle {
   };
 }
 
-function fundingForTime(rows: FundingRow[], time: number): number {
+function fundingForTime(rows: FundingRow[], time: number): number | undefined {
   for (let index = rows.length - 1; index >= 0; index -= 1) {
     if (rows[index].fundingTime <= time) return rows[index].fundingRatePercent;
   }
-  return 0;
+  return undefined;
 }
 
-function fearGreedForTime(rows: FearGreedRow[], time: number): number {
-  const date = utcDate(time);
-  for (let index = rows.length - 1; index >= 0; index -= 1) {
-    if (rows[index].date <= date) return rows[index].value;
-  }
-  return 50;
-}
 
 function writeJson(path: string, value: unknown) {
   return writeText(path, `${JSON.stringify(value, null, 2)}\n`);
@@ -193,9 +195,15 @@ function writeJson(path: string, value: unknown) {
 
 function writeMarkdown(path: string, payload: typeof summary & { source: string; reports: Array<Record<string, unknown>> }) {
   const rows = payload.rows.map((row) => `| ${row.asset} | ${row.interval} | ${row.signalType} | ${row.signalCount} | ${row.hitCount} | ${row.hitRatePercent}% | ${row.averageCloseReturnPercent}% |`).join('\n');
+  const coverage = payload.reports
+    .map(
+      (report) =>
+        `| ${report.asset} | ${report.interval} | ${report.horizon} | ${report.dataStart ?? 'n/a'} | ${report.dataEnd ?? 'n/a'} | ${report.signalCount} | ${report.excludedSignals} |`,
+    )
+    .join('\n');
   return writeText(
     path,
-    `# Crypto signal backtest report\n\nGenerated: ${payload.generatedAt}\nSource: ${payload.source}\n\nLook-ahead rule: score after candle close, enter at next observable candle open.\n\n| Asset | Interval | Signal | Count | Hits | Hit rate | Avg close return |\n| --- | --- | --- | ---: | ---: | ---: | ---: |\n${rows}\n\n## Data limitations\n\n${payload.dataLimitations.map((item) => `- ${item}`).join('\n')}\n`,
+    `# Crypto signal backtest report\n\nGenerated: ${payload.generatedAt}\nSource: ${payload.source}\n\n## Methodology\n\n- Score weights with complete inputs: moving averages 25 + RSI 20 + MFI 20 + funding/open interest 20 + Fear & Greed 15 = 100.\n- ETH additionally blends the normalized base score at 95% with ETH/BTC 20-candle relative strength at 5%.\n- Missing indicators receive neither zero nor full credit; available weights are normalized to 100 and disclosed below.\n- Look-ahead rule: calculate the score after candle close, enter at the next candle open, evaluate only complete 24h (4h bars) or 7d (1d bars) horizons, and exclude the candle starting at the horizon boundary.\n- Hit rule: strong-buy succeeds on a +3% intrahorizon high; strong-sell succeeds on a -3% intrahorizon low.\n\n| Asset | Interval | Signal | Count | Hits | Hit rate | Avg close return |\n| --- | --- | --- | ---: | ---: | ---: | ---: |\n${rows}\n\n## Coverage\n\n| Asset | Interval | Horizon | Data start | Data end | Evaluated signals | Excluded signals |\n| --- | --- | --- | --- | --- | ---: | ---: |\n${coverage}\n\n## Data limitations\n\n${payload.dataLimitations.map((item) => `- ${item}`).join('\n')}\n`,
   );
 }
 
@@ -228,9 +236,6 @@ function intervalMs(interval: Interval): number {
   return interval === '4h' ? 4 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
 }
 
-function floorToClosedInterval(time: number, size: number): number {
-  return Math.floor(time / size) * size - size;
-}
 
 function average(values: number[]): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;

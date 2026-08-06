@@ -370,8 +370,8 @@ export function buildAssetSignal(input: {
   price: number;
   closes?: number[];
   candles?: MarketCandle[];
-  fearGreed: number;
-  fundingPercent: number;
+  fearGreed?: number;
+  fundingPercent?: number;
   oiChangePercent?: number;
   priceChangePercent?: number;
   ethBtcCurrent?: number;
@@ -399,14 +399,24 @@ export function buildAssetSignal(input: {
     missingFeatures.push('mfi');
   }
 
-  const futures = scoreFuturesPositioning({
-    fundingPercent: input.fundingPercent,
-    oiChangePercent: input.oiChangePercent,
-    priceChangePercent: input.priceChangePercent,
-  });
-  indicators.push(futures, scoreFearGreed(input.fearGreed));
-  if (input.oiChangePercent === undefined || input.priceChangePercent === undefined) {
+  if (input.fundingPercent === undefined) {
+    missingFeatures.push('funding', 'open-interest');
+  } else {
+    indicators.push(
+      scoreFuturesPositioning({
+        fundingPercent: input.fundingPercent,
+        oiChangePercent: input.oiChangePercent,
+        priceChangePercent: input.priceChangePercent,
+      }),
+    );
+  }
+  if (input.fundingPercent !== undefined && (input.oiChangePercent === undefined || input.priceChangePercent === undefined)) {
     missingFeatures.push('open-interest');
+  }
+  if (input.fearGreed === undefined) {
+    missingFeatures.push('fear-greed');
+  } else {
+    indicators.push(scoreFearGreed(input.fearGreed));
   }
 
   const rawScore = indicators.reduce((total, indicator) => total + indicator.score, 0);

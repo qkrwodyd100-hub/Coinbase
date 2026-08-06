@@ -214,4 +214,19 @@ describe('advanced asset signal contract', () => {
     expect(signal.scorePolicy).toContain('available indicator weights');
     expect(signal.overallScore).toBe(46);
   });
+
+  it('excludes unavailable funding and Fear & Greed instead of substituting favorable or neutral defaults', () => {
+    const closes = Array.from({ length: 60 }, (_, index) => 100 + index);
+
+    const signal = buildAssetSignal({
+      symbol: 'BTC',
+      name: '비트코인',
+      price: 160,
+      closes,
+    });
+
+    expect(signal.missingFeatures).toEqual(['mfi', 'funding', 'open-interest', 'fear-greed']);
+    expect(signal.indicators.map((indicator) => indicator.id)).toEqual(['moving-averages', 'rsi']);
+    expect(signal.overallScore).toBe(44);
+  });
 });
