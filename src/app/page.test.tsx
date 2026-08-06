@@ -20,7 +20,7 @@ const okPayload = {
   assets: [
     {
       symbol: 'BTC',
-      name: 'Bitcoin',
+      name: '비트코인',
       price: 65000,
       overallScore: 85,
       signal: { label: '강력 매수', tone: 'positive' },
@@ -41,7 +41,7 @@ const okPayload = {
     },
     {
       symbol: 'ETH',
-      name: 'Ethereum',
+      name: '이더리움',
       price: 3200,
       overallScore: 55,
       signal: { label: '관망', tone: 'neutral' },
@@ -76,16 +76,16 @@ describe('dashboard behavior', () => {
 
     render(createElement(Home));
 
-    expect(await screen.findByRole('heading', { name: /Bitcoin 시그널/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /비트코인 시그널/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'BTC / ETH 시그널 대시보드' })).toBeInTheDocument();
     expect(screen.getAllByText('$65,000 · ₩89,050,000').length).toBeGreaterThan(0);
     expect(screen.getAllByText('강력 매수').length).toBeGreaterThan(0);
     expect(screen.getByText(/Kraken 선물 펀딩/)).toBeInTheDocument();
-    expect(screen.getByRole('meter', { name: /Bitcoin 시그널 점수/i })).toHaveAttribute('aria-valuenow', '85');
+    expect(screen.getByRole('meter', { name: /비트코인 시그널 점수/i })).toHaveAttribute('aria-valuenow', '85');
 
-    await userEvent.click(screen.getByRole('tab', { name: /eth.*ethereum/i }));
+    await userEvent.click(screen.getByRole('tab', { name: /eth.*이더리움/i }));
 
-    expect(screen.getByRole('heading', { name: /Ethereum 시그널/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /이더리움 시그널/i })).toBeInTheDocument();
     expect(screen.getAllByText('$3,200 · ₩4,384,000').length).toBeGreaterThan(0);
     expect(screen.getAllByText('관망').length).toBeGreaterThan(0);
   });
@@ -121,7 +121,7 @@ describe('dashboard behavior', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     render(createElement(Home));
-    await screen.findByRole('heading', { name: /Bitcoin 시그널/i });
+    await screen.findByRole('heading', { name: /비트코인 시그널/i });
 
     fireEvent.click(screen.getByRole('button', { name: /시그널 새로고침/i }));
 
@@ -144,7 +144,7 @@ describe('dashboard behavior', () => {
     vi.spyOn(window, 'clearInterval').mockImplementation(() => undefined);
 
     render(createElement(Home));
-    await screen.findByRole('heading', { name: /Bitcoin 시그널/i });
+    await screen.findByRole('heading', { name: /비트코인 시그널/i });
 
     expect(intervalCallback).not.toBeNull();
     await act(async () => {
@@ -162,13 +162,13 @@ describe('dashboard behavior', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     render(createElement(Home));
-    await screen.findByRole('heading', { name: /Bitcoin 시그널/i });
+    await screen.findByRole('heading', { name: /비트코인 시그널/i });
 
     await userEvent.click(screen.getByRole('button', { name: /시그널 새로고침/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/시그널을 새로고침하지 못했습니다/i);
     expect(screen.getByText(/마지막으로 성공한 스냅샷을 표시합니다/i)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Bitcoin 시그널/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /비트코인 시그널/i })).toBeInTheDocument();
   });
 
   it('keeps the newest successful refresh when an older request fails later', async () => {
@@ -181,7 +181,7 @@ describe('dashboard behavior', () => {
     vi.spyOn(window, 'clearInterval').mockImplementation(() => undefined);
 
     render(createElement(Home));
-    await screen.findByRole('heading', { name: /Bitcoin 시그널/i });
+    await screen.findByRole('heading', { name: /비트코인 시그널/i });
     const intervalCallback = intervalSpy.mock.calls[0][0] as () => void;
 
     await act(async () => intervalCallback());
@@ -199,6 +199,6 @@ describe('dashboard behavior', () => {
     });
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Bitcoin 시그널/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /비트코인 시그널/i })).toBeInTheDocument();
   });
 });

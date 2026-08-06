@@ -158,7 +158,7 @@ function DashboardContent({
         <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-5 text-sm leading-6 text-slate-300">
           <h2 className="font-bold text-slate-100">점수 산정 메모</h2>
           <p className="mt-2">
-            이동평균이 엇갈린 경우 가격이 MA20 또는 MA50 이상이면 10점을 부여하고, 완전한 약세 구간이 0점이 아닌 경우에는 5점을 부여합니다.
+            이동평균이 엇갈린 경우 가격이 MA20 또는 MA50 이상이면 10점, 두 이동평균 아래지만 완전한 약세 배열이 아니면 5점, 완전한 약세 배열이면 0점을 부여합니다.
           </p>
         </div>
       </aside>

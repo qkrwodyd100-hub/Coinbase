@@ -8,8 +8,8 @@ type AssetConfig = {
 };
 
 const ASSETS: AssetConfig[] = [
-  { symbol: 'BTC', name: 'Bitcoin', krakenPair: 'XBTUSD', fundingSymbol: 'PF_XBTUSD' },
-  { symbol: 'ETH', name: 'Ethereum', krakenPair: 'ETHUSD', fundingSymbol: 'PF_ETHUSD' },
+  { symbol: 'BTC', name: '비트코인', krakenPair: 'XBTUSD', fundingSymbol: 'PF_XBTUSD' },
+  { symbol: 'ETH', name: '이더리움', krakenPair: 'ETHUSD', fundingSymbol: 'PF_ETHUSD' },
 ];
 
 const KRAKEN_BASE = 'https://api.kraken.com/0/public';
@@ -50,18 +50,16 @@ async function getAssetSignal(asset: AssetConfig, fearGreed: number, usdKrwRate:
 }
 
 async function getUsdKrwRate(): Promise<number | null> {
-  let payload: unknown;
   try {
-    payload = await fetchJson(USD_KRW_URL);
+    const payload = await fetchJson(USD_KRW_URL);
+    if (!isRecord(payload) || payload.base !== 'USD' || payload.amount !== 1 || !isRecord(payload.rates)) {
+      return null;
+    }
+
+    return parsePositiveFiniteUnknown(payload.rates.KRW, 'USD to KRW exchange rate');
   } catch {
     return null;
   }
-
-  if (!isRecord(payload) || !isRecord(payload.rates)) {
-    throw new Error('Unexpected USD to KRW exchange rate payload.');
-  }
-
-  return parsePositiveFiniteUnknown(payload.rates.KRW, 'USD to KRW exchange rate');
 }
 
 async function getTickerPrice(symbol: string): Promise<number> {

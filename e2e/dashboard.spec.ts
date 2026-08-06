@@ -7,7 +7,7 @@ const payload = {
   assets: [
     {
       symbol: 'BTC',
-      name: 'Bitcoin',
+      name: '비트코인',
       price: 65000,
       overallScore: 85,
       signal: { label: '강력 매수', tone: 'positive' },
@@ -28,7 +28,7 @@ const payload = {
     },
     {
       symbol: 'ETH',
-      name: 'Ethereum',
+      name: '이더리움',
       price: 3200,
       overallScore: 55,
       signal: { label: '관망', tone: 'neutral' },
@@ -80,7 +80,7 @@ function expectNoClientErrors(page: Page) {
 }
 
 async function expectPositiveSignalStyling(page: Page) {
-  const meter = page.getByRole('meter', { name: /bitcoin 시그널 점수/i });
+  const meter = page.getByRole('meter', { name: /비트코인 시그널 점수/i });
   await expect(meter).toHaveAttribute('aria-valuenow', '85');
   await expect(meter.getByText('강력 매수')).toBeVisible();
 
@@ -101,15 +101,15 @@ test('dashboard renders Korean live data, KRW prices, and supports asset switchi
 
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: /bitcoin 시그널/i })).toBeVisible();
-  await expect(page.getByRole('tab', { name: /btc.*bitcoin/i }).getByText('$65,000 · ₩89,050,000')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /비트코인 시그널/i })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /btc.*비트코인/i }).getByText('$65,000 · ₩89,050,000')).toBeVisible();
   await expect(page.getByText('강력 매수').last()).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  await page.getByRole('tab', { name: /eth.*ethereum/i }).click();
+  await page.getByRole('tab', { name: /eth.*이더리움/i }).click();
 
-  await expect(page.getByRole('heading', { name: /ethereum 시그널/i })).toBeVisible();
-  await expect(page.getByRole('tab', { name: /eth.*ethereum/i }).getByText('$3,200 · ₩4,384,000')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /이더리움 시그널/i })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /eth.*이더리움/i }).getByText('$3,200 · ₩4,384,000')).toBeVisible();
   await expect(page.getByText('관망').last()).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await assertNoClientErrors();
@@ -130,7 +130,7 @@ test('dashboard exposes accessible Korean loading and score states with positive
 
   await expect(page.getByRole('status', { name: /대시보드 로딩 중/i })).toBeVisible();
   releaseInitialResponse();
-  await expect(page.getByRole('heading', { name: /bitcoin 시그널/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /비트코인 시그널/i })).toBeVisible();
   await expectPositiveSignalStyling(page);
   await testInfo.attach(`${testInfo.project.name}-dashboard`, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
   await assertNoClientErrors();
@@ -151,7 +151,7 @@ test('manual refresh disables the Korean refresh action and replaces the timesta
   });
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /bitcoin 시그널/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /비트코인 시그널/i })).toBeVisible();
   await expect(page.getByText(/0시 0분 0초/)).toBeVisible();
   const initialRequestCount = requestCount;
   holdRefresh = true;
@@ -176,7 +176,7 @@ test('60-second automatic refresh uses the newest live payload with controlled t
   });
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /bitcoin 시그널/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /비트코인 시그널/i })).toBeVisible();
   await expect(page.getByText(/0시 0분 0초/)).toBeVisible();
   const initialRequestCount = requestCount;
   afterInitialRender = true;
@@ -196,14 +196,14 @@ test('dashboard keeps stale data visible after refresh failure', async ({ page }
   });
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /bitcoin 시그널/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /비트코인 시그널/i })).toBeVisible();
 
   shouldFail = true;
   await page.getByRole('button', { name: /시그널 새로고침/i }).click();
 
   await expect(page.getByText(/시그널을 새로고침하지 못했습니다/i)).toBeVisible();
   await expect(page.getByText(/마지막으로 성공한 스냅샷/i)).toBeVisible();
-  await expect(page.getByRole('heading', { name: /bitcoin 시그널/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /비트코인 시그널/i })).toBeVisible();
   await assertNoClientErrors();
 });
 
@@ -215,7 +215,7 @@ test('dashboard shows an initial API error without stale-data copy when no snaps
 
   await expect(page.getByText(/잠시 후 다시 시도해 주세요/i)).toBeVisible();
   await expect(page.getByText(/마지막으로 성공한 스냅샷/i)).toBeHidden();
-  await expect(page.getByRole('heading', { name: /bitcoin 시그널/i })).toBeHidden();
+  await expect(page.getByRole('heading', { name: /비트코인 시그널/i })).toBeHidden();
   await assertNoClientErrors();
 });
 
@@ -225,12 +225,12 @@ test('dashboard surfaces stale API payloads and FX fallback states', async ({ pa
 
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: /bitcoin 시그널/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /비트코인 시그널/i })).toBeVisible();
   await expect(page.getByText(/오래된 데이터: 새로고침 실패 후 캐시된 스냅샷/i)).toBeVisible();
   await assertNoClientErrors();
 
   await page.route('**/api/signals', (route) => route.fulfill({ json: fxUnavailablePayload }));
   await page.getByRole('button', { name: /시그널 새로고침/i }).click();
   await expect(page.getByText(/원화 환산을 잠시 표시할 수 없습니다/i)).toBeVisible();
-  await expect(page.getByRole('tab', { name: /btc.*bitcoin/i }).getByText('$65,000')).toBeVisible();
+  await expect(page.getByRole('tab', { name: /btc.*비트코인/i }).getByText('$65,000')).toBeVisible();
 });
