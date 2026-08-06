@@ -139,6 +139,19 @@ describe('indicator calculations', () => {
 });
 
 describe('advanced asset signal contract', () => {
+  it('keeps the full advanced scoring weights at MA 25, RSI 20, MFI 20, funding/OI 20, and Fear & Greed 15', () => {
+    const indicators = [scoreMovingAverages(104, 100, 90), scoreRsi(30), scoreMfi(20), scoreFuturesPositioning({ fundingPercent: -0.001, oiChangePercent: 2, priceChangePercent: 2 }), scoreFearGreed(25)];
+
+    expect(indicators.map((indicator) => [indicator.id, indicator.maxScore])).toEqual([
+      ['moving-averages', 25],
+      ['rsi', 20],
+      ['mfi', 20],
+      ['futures-positioning', 20],
+      ['fear-greed', 15],
+    ]);
+    expect(indicators.reduce((total, indicator) => total + indicator.maxScore, 0)).toBe(100);
+  });
+
   it('combines BTC indicators into a 0-100 score without missing features', () => {
     const candles = Array.from({ length: 60 }, (_, index) => ({
       openTime: index * 86_400_000,
@@ -199,7 +212,6 @@ describe('advanced asset signal contract', () => {
 
     expect(signal.missingFeatures).toEqual(['mfi', 'open-interest']);
     expect(signal.scorePolicy).toContain('available indicator weights');
-    expect(signal.overallScore).toBeGreaterThanOrEqual(0);
-    expect(signal.overallScore).toBeLessThanOrEqual(100);
+    expect(signal.overallScore).toBe(46);
   });
 });

@@ -59,7 +59,7 @@ export function runBacktest(input: { asset: 'BTC' | 'ETH'; interval: '4h' | '1d'
     }
 
     const horizonEnd = entry.candle.openTime + input.horizonMs;
-    const evaluationCandles = input.scoredCandles.slice(index + 1).filter((item) => item.candle.openTime <= horizonEnd);
+    const evaluationCandles = input.scoredCandles.slice(index + 1).filter((item) => item.candle.openTime < horizonEnd);
     if (evaluationCandles.length === 0) {
       excludedSignals += 1;
       previousType = type;
@@ -108,7 +108,6 @@ export function summarizeBacktest(results: BacktestResult[]): BacktestSummary {
     generatedAt: new Date().toISOString(),
     rows,
     dataLimitations: [
-      'missing indicators are explicitly excluded and available weights are normalized',
       'missing indicators are explicitly excluded and available weights are normalized; full-data and limited-data results must be compared separately.',
       'public no-key data can have delayed archive files; reports include data start/end and excluded signal counts.',
       'Fear & Greed is daily and is forward-filled for 4h candles by UTC date.',

@@ -13,8 +13,8 @@ const payload = {
       signal: { label: '강력 매수', tone: 'positive' },
       stale: false,
       indicators: [
-        { id: 'rsi', title: 'RSI (14)', value: '28.00', score: 30, maxScore: 30, interpretation: '과매도 구간은 RSI 점수를 가장 높게 반영합니다.' },
-        { id: 'fear-greed', title: '공포·탐욕 지수', value: '22', score: 20, maxScore: 20, interpretation: '극단적 공포는 역발상 매집 구간일 수 있습니다.' },
+        { id: 'rsi', title: 'RSI (14)', value: '28.00', score: 20, maxScore: 20, interpretation: '과매도 구간은 RSI 점수를 가장 높게 반영합니다.' },
+        { id: 'fear-greed', title: '공포·탐욕 지수', value: '22', score: 15, maxScore: 15, interpretation: '극단적 공포는 역발상 매집 구간일 수 있습니다.' },
         {
           id: 'moving-averages',
           title: '이동평균',
@@ -23,7 +23,7 @@ const payload = {
           maxScore: 25,
           interpretation: '가격이 두 이동평균 위에 있고 단기 추세가 앞서고 있습니다.',
         },
-        { id: 'funding', title: 'Kraken 선물 펀딩비율', value: '-0.0010%', score: 25, maxScore: 25, interpretation: '중립 또는 음수 펀딩은 과열된 롱 레버리지를 피합니다.' },
+        { id: 'futures-positioning', title: '선물 펀딩비·미체결약정', value: '-0.0010% / OI 2.00%', score: 20, maxScore: 20, interpretation: '음수 또는 중립 펀딩은 과열된 롱 레버리지를 피합니다.' },
       ],
     },
     {
@@ -34,8 +34,8 @@ const payload = {
       signal: { label: '관망', tone: 'neutral' },
       stale: false,
       indicators: [
-        { id: 'rsi', title: 'RSI (14)', value: '52.00', score: 15, maxScore: 30, interpretation: '중간 범위의 모멘텀은 건설적이지만 큰 할인 구간은 아닙니다.' },
-        { id: 'fear-greed', title: '공포·탐욕 지수', value: '50', score: 10, maxScore: 20, interpretation: '균형 잡힌 심리는 중간 점수를 받습니다.' },
+        { id: 'rsi', title: 'RSI (14)', value: '52.00', score: 5, maxScore: 20, interpretation: '중간 범위의 모멘텀은 건설적이지만 큰 할인 구간은 아닙니다.' },
+        { id: 'fear-greed', title: '공포·탐욕 지수', value: '50', score: 8, maxScore: 15, interpretation: '균형 잡힌 심리는 중간 점수를 받습니다.' },
         {
           id: 'moving-averages',
           title: '이동평균',
@@ -44,7 +44,7 @@ const payload = {
           maxScore: 25,
           interpretation: '가격은 MA20 위에 있지만 추세 확인은 엇갈립니다.',
         },
-        { id: 'funding', title: 'Kraken 선물 펀딩비율', value: '0.0200%', score: 5, maxScore: 25, interpretation: '보통 수준의 양수 펀딩은 선물 점수를 낮춥니다.' },
+        { id: 'futures-positioning', title: '선물 펀딩비·미체결약정', value: '0.0200% / OI -1.00%', score: 10, maxScore: 20, interpretation: '보통 수준의 양수 펀딩은 선물 점수를 낮춥니다.' },
       ],
     },
   ],
@@ -104,7 +104,7 @@ test('dashboard renders Korean live data, KRW prices, and supports asset switchi
   await expect(page.getByRole('heading', { name: /비트코인 시그널/i })).toBeVisible();
   await expect(page.getByRole('tab', { name: /btc.*비트코인/i }).getByText('$65,000 · ₩89,050,000')).toBeVisible();
   await expect(page.getByText('강력 매수').last()).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Kraken 선물 펀딩비율' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '선물 펀딩비·미체결약정' })).toBeVisible();
   const btcMeter = page.getByRole('meter', { name: /비트코인 시그널 점수/i });
   await expect(btcMeter.locator('circle.stroke-emerald-300')).toBeVisible();
   await expect(btcMeter.getByText('강력 매수')).toHaveClass(/text-emerald-100/);
