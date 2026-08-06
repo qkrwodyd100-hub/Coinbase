@@ -1,50 +1,75 @@
-import { buildAssetSignal, type AssetSignal, type DashboardPayload } from './signals';
+import { buildAssetSignal, type AssetSignal, type BacktestSummaryRow, type DashboardPayload, type MarketCandle } from './signals';
+import backtestSummary from '@/data/backtest-summary.json';
+
+const STATIC_BACKTEST_SUMMARY = backtestSummary as {
+  generatedAt: string;
+  source: string;
+  rows: BacktestSummaryRow[];
+  dataLimitations: string[];
+};
 
 type AssetConfig = {
   symbol: 'BTC' | 'ETH';
   name: string;
-  krakenPair: 'XBTUSD' | 'ETHUSD';
-  fundingSymbol: 'PF_XBTUSD' | 'PF_ETHUSD';
+  spotSymbol: 'BTCUSDT' | 'ETHUSDT';
+  futuresSymbol: 'BTCUSDT' | 'ETHUSDT';
 };
 
 const ASSETS: AssetConfig[] = [
-  { symbol: 'BTC', name: '비트코인', krakenPair: 'XBTUSD', fundingSymbol: 'PF_XBTUSD' },
-  { symbol: 'ETH', name: '이더리움', krakenPair: 'ETHUSD', fundingSymbol: 'PF_ETHUSD' },
+  { symbol: 'BTC', name: '비트코인', spotSymbol: 'BTCUSDT', futuresSymbol: 'BTCUSDT' },
+  { symbol: 'ETH', name: '이더리움', spotSymbol: 'ETHUSDT', futuresSymbol: 'ETHUSDT' },
 ];
 
-const KRAKEN_BASE = 'https://api.kraken.com/0/public';
-const KRAKEN_FUTURES_BASE = 'https://futures.kraken.com/derivatives/api/v3';
+const BINANCE_SPOT_BASE = 'https://data-api.binance.vision/api/v3';
+const BINANCE_FUTURES_BASE = 'https://fapi.binance.com';
 const FEAR_GREED_URL = 'https://api.alternative.me/fng/?limit=1&format=json';
 const USD_KRW_URL = 'https://api.frankfurter.app/latest?from=USD&to=KRW';
 const REQUEST_TIMEOUT_MS = 8_000;
 const REVALIDATE_SECONDS = 55;
 
 export async function getDashboardPayload(): Promise<DashboardPayload> {
-  const [fearGreed, usdKrwRate] = await Promise.all([getFearGreedIndex(), getUsdKrwRate()]);
-  const assets = await Promise.all(ASSETS.map((asset) => getAssetSignal(asset, fearGreed, usdKrwRate)));
+  const [fearGreed, usdKrwRate, ethBtcCandles] = await Promise.all([getFearGreedIndex(), getUsdKrwRate(), getSpotCandles('ETHBTC', '1d', 80)]);
+  const ethBtcCloses = ethBtcCandles.map((candle) => candle.close);
+  const ethBtcCurrent = ethBtcCloses.at(-1);
+  const ethBtcMa20 = ethBtcCloses.length >= 20 ? ethBtcCloses.slice(-20).reduce((sum, close) => sum + close, 0) / 20 : undefined;
+  const assets = await Promise.all(ASSETS.map((asset) => getAssetSignal(asset, fearGreed, usdKrwRate, ethBtcCurrent, ethBtcMa20)));
 
   return {
     asOf: new Date().toISOString(),
     usdKrwRate,
     fxUnavailable: usdKrwRate === null,
     assets,
+    backtestSummary: STATIC_BACKTEST_SUMMARY,
   };
 }
 
-async function getAssetSignal(asset: AssetConfig, fearGreed: number, usdKrwRate: number | null): Promise<AssetSignal> {
-  const [price, closes, fundingPercent] = await Promise.all([
-    getTickerPrice(asset.krakenPair),
-    getDailyCloses(asset.krakenPair),
-    getFundingPercent(asset.fundingSymbol),
+async function getAssetSignal(
+  asset: AssetConfig,
+  fearGreed: number,
+  usdKrwRate: number | null,
+  ethBtcCurrent: number | undefined,
+  ethBtcMa20: number | undefined,
+): Promise<AssetSignal> {
+  const [price, candles, fundingPercent, openInterest] = await Promise.all([
+    getTickerPrice(asset.spotSymbol),
+    getSpotCandles(asset.spotSymbol, '1d', 80),
+    getFundingPercent(asset.futuresSymbol),
+    getOpenInterestChange(asset.futuresSymbol),
   ]);
+  const previousClose = candles.at(-2)?.close ?? candles.at(-1)?.open ?? price;
+  const priceChangePercent = ((price - previousClose) / previousClose) * 100;
 
   return buildAssetSignal({
     symbol: asset.symbol,
     name: asset.name,
     price,
-    closes,
+    candles,
     fearGreed,
     fundingPercent,
+    oiChangePercent: openInterest.changePercent,
+    priceChangePercent,
+    ethBtcCurrent: asset.symbol === 'ETH' ? ethBtcCurrent : undefined,
+    ethBtcMa20: asset.symbol === 'ETH' ? ethBtcMa20 : undefined,
     usdKrwRate,
   });
 }
@@ -63,41 +88,47 @@ async function getUsdKrwRate(): Promise<number | null> {
 }
 
 async function getTickerPrice(symbol: string): Promise<number> {
-  const ticker = getKrakenResultEntry(await fetchJson(`${KRAKEN_BASE}/Ticker?pair=${symbol}`), symbol);
-  if (!isRecord(ticker) || !Array.isArray(ticker.c) || typeof ticker.c[0] !== 'string') {
+  const payload = await fetchJson(`${BINANCE_SPOT_BASE}/ticker/price?symbol=${symbol}`);
+  if (!isRecord(payload) || payload.symbol !== symbol) {
     throw new Error(`Unexpected ticker payload for ${symbol}`);
   }
 
-  return parsePositiveFiniteNumber(ticker.c[0], `${symbol} price`);
+  return parsePositiveFiniteUnknown(payload.price, `${symbol} price`);
 }
 
-async function getDailyCloses(symbol: string): Promise<number[]> {
-  const candles = getKrakenResultEntry(await fetchJson(`${KRAKEN_BASE}/OHLC?pair=${symbol}&interval=1440`), symbol);
-  if (!Array.isArray(candles)) {
+async function getSpotCandles(symbol: string, interval: '1d' | '4h', limit: number): Promise<MarketCandle[]> {
+  const payload = await fetchJson(`${BINANCE_SPOT_BASE}/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+  if (!Array.isArray(payload)) {
     throw new Error(`Unexpected kline payload for ${symbol}`);
   }
 
-  const closes = candles.slice(-80).map((entry, index) => {
-    if (!Array.isArray(entry) || typeof entry[4] !== 'string') {
-      throw new Error(`Unexpected kline close at ${symbol}[${index}]`);
-    }
-    return parsePositiveFiniteNumber(entry[4], `${symbol} close`);
-  });
-
-  if (closes.length < 51) {
+  const candles = payload.map((entry, index) => parseKline(entry, `${symbol}[${index}]`));
+  if (candles.length < 51) {
     throw new Error(`Not enough ${symbol} closes to calculate signals.`);
   }
 
-  return closes;
+  return candles;
 }
 
 async function getFundingPercent(symbol: string): Promise<number> {
-  const payload = await fetchJson(`${KRAKEN_FUTURES_BASE}/tickers/${symbol}`);
-  if (!isRecord(payload) || payload.result !== 'success' || !isRecord(payload.ticker) || typeof payload.ticker.fundingRate !== 'number') {
+  const payload = await fetchJson(`${BINANCE_FUTURES_BASE}/fapi/v1/fundingRate?symbol=${symbol}&limit=1`);
+  if (!Array.isArray(payload) || !isRecord(payload[0])) {
     throw new Error(`Unexpected funding payload for ${symbol}`);
   }
 
-  return parseBoundedNumber(payload.ticker.fundingRate, `${symbol} funding`, -100, 100);
+  const fundingRate = parseBoundedFiniteUnknown(payload[0].fundingRate, `${symbol} funding`, -100, 100);
+  return fundingRate * 100;
+}
+
+async function getOpenInterestChange(symbol: string): Promise<{ current: number; previous: number; changePercent: number }> {
+  const payload = await fetchJson(`${BINANCE_FUTURES_BASE}/futures/data/openInterestHist?symbol=${symbol}&period=4h&limit=2`);
+  if (!Array.isArray(payload) || payload.length < 2 || !isRecord(payload[0]) || !isRecord(payload[1])) {
+    throw new Error(`Unexpected open interest payload for ${symbol}`);
+  }
+
+  const previous = parsePositiveFiniteUnknown(payload[0].sumOpenInterest ?? payload[0].sum_open_interest, `${symbol} previous open interest`);
+  const current = parsePositiveFiniteUnknown(payload[1].sumOpenInterest ?? payload[1].sum_open_interest, `${symbol} open interest`);
+  return { current, previous, changePercent: ((current - previous) / previous) * 100 };
 }
 
 async function getFearGreedIndex(): Promise<number> {
@@ -110,7 +141,7 @@ async function getFearGreedIndex(): Promise<number> {
     throw new Error('Missing latest Fear & Greed value.');
   }
 
-  return parseBoundedFiniteNumber(latest.value, 'Fear & Greed', 0, 100);
+  return parseBoundedFiniteUnknown(latest.value, 'Fear & Greed', 0, 100);
 }
 
 async function fetchJson(url: string): Promise<unknown> {
@@ -134,32 +165,31 @@ async function fetchJson(url: string): Promise<unknown> {
   }
 }
 
+function parseKline(entry: unknown, label: string): MarketCandle {
+  if (!Array.isArray(entry) || entry.length < 6) {
+    throw new Error(`Unexpected kline row for ${label}`);
+  }
+
+  return {
+    openTime: parseTimestamp(entry[0], `${label} open time`),
+    open: parsePositiveFiniteUnknown(entry[1], `${label} open`),
+    high: parsePositiveFiniteUnknown(entry[2], `${label} high`),
+    low: parsePositiveFiniteUnknown(entry[3], `${label} low`),
+    close: parsePositiveFiniteUnknown(entry[4], `${label} close`),
+    volume: parsePositiveFiniteUnknown(entry[5], `${label} volume`),
+  };
+}
+
+function parseTimestamp(value: unknown, label: string): number {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${label} must be a positive timestamp.`);
+  }
+  return parsed > 1e15 ? Math.trunc(parsed / 1000) : parsed;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-function getKrakenResultEntry(payload: unknown, symbol: string): unknown {
-  if (!isRecord(payload) || !Array.isArray(payload.error) || payload.error.length > 0 || !isRecord(payload.result)) {
-    throw new Error(`Unexpected Kraken payload for ${symbol}`);
-  }
-
-  return Object.entries(payload.result).find(([key]) => key !== 'last')?.[1];
-}
-
-function parseFiniteNumber(value: string, label: string): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`${label} is not a finite number.`);
-  }
-  return parsed;
-}
-
-function parsePositiveFiniteNumber(value: string, label: string): number {
-  const parsed = parseFiniteNumber(value, label);
-  if (parsed <= 0) {
-    throw new Error(`${label} must be greater than zero.`);
-  }
-  return parsed;
 }
 
 function parsePositiveFiniteUnknown(value: unknown, label: string): number {
@@ -173,17 +203,10 @@ function parsePositiveFiniteUnknown(value: unknown, label: string): number {
   return parsed;
 }
 
-function parseBoundedFiniteNumber(value: string, label: string, minimum: number, maximum: number): number {
-  const parsed = parseFiniteNumber(value, label);
-  if (parsed < minimum || parsed > maximum) {
+function parseBoundedFiniteUnknown(value: unknown, label: string, minimum: number, maximum: number): number {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
+  if (!Number.isFinite(parsed) || parsed < minimum || parsed > maximum) {
     throw new Error(`${label} must be between ${minimum} and ${maximum}.`);
   }
   return parsed;
-}
-
-function parseBoundedNumber(value: number, label: string, minimum: number, maximum: number): number {
-  if (!Number.isFinite(value) || value < minimum || value > maximum) {
-    throw new Error(`${label} must be between ${minimum} and ${maximum}.`);
-  }
-  return value;
 }

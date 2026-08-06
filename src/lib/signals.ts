@@ -1,5 +1,14 @@
 export type SignalTone = 'positive' | 'neutral' | 'negative';
-export type IndicatorId = 'rsi' | 'fear-greed' | 'moving-averages' | 'funding';
+export type IndicatorId = 'rsi' | 'fear-greed' | 'moving-averages' | 'funding' | 'mfi' | 'futures-positioning' | 'eth-btc-strength';
+
+export type MarketCandle = {
+  openTime: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
 
 export type IndicatorScore = {
   id: IndicatorId;
@@ -25,6 +34,20 @@ export type AssetSignal = {
   signal: Signal;
   stale: boolean;
   indicators: IndicatorScore[];
+  missingFeatures: string[];
+  scorePolicy: string;
+};
+
+export type BacktestSummaryRow = {
+  asset: 'BTC' | 'ETH';
+  interval: '4h' | '1d';
+  signalType: 'strong-buy' | 'strong-sell';
+  signalCount: number;
+  hitCount: number;
+  hitRatePercent: number;
+  averageCloseReturnPercent: number;
+  averageMaxFavorablePercent: number;
+  averageMaxAdversePercent: number;
 };
 
 export type DashboardPayload = {
@@ -32,7 +55,15 @@ export type DashboardPayload = {
   usdKrwRate: number | null;
   fxUnavailable: boolean;
   assets: AssetSignal[];
+  backtestSummary?: {
+    generatedAt: string;
+    source: string;
+    rows: BacktestSummaryRow[];
+    dataLimitations: string[];
+  };
 };
+
+const SCORE_POLICY = 'missing features are not converted to zero or full credit; available indicator weights are normalized to 100 and limitations are exposed.';
 
 export function calculateMovingAverage(closes: number[], period: number): number {
   if (!Number.isInteger(period) || period <= 0) {
@@ -85,25 +116,50 @@ export function calculateRsi(closes: number[], period = 14): number {
   return 100 - 100 / (1 + relativeStrength);
 }
 
+export function calculateMfi(candles: MarketCandle[], period = 14): number {
+  if (!Number.isInteger(period) || period <= 0) {
+    throw new Error('MFI period must be a positive integer.');
+  }
+  if (candles.length < period + 1) {
+    throw new Error(`Need at least ${period + 1} candles to calculate MFI(${period}).`);
+  }
+
+  const window = candles.slice(-(period + 1));
+  let positiveFlow = 0;
+  let negativeFlow = 0;
+
+  for (let index = 1; index < window.length; index += 1) {
+    const previousTypical = typicalPrice(window[index - 1]);
+    const currentTypical = typicalPrice(window[index]);
+    const rawMoneyFlow = currentTypical * window[index].volume;
+    if (currentTypical > previousTypical) {
+      positiveFlow += rawMoneyFlow;
+    } else if (currentTypical < previousTypical) {
+      negativeFlow += rawMoneyFlow;
+    }
+  }
+
+  if (negativeFlow === 0) return positiveFlow === 0 ? 50 : 100;
+  const moneyRatio = positiveFlow / negativeFlow;
+  return 100 - 100 / (1 + moneyRatio);
+}
+
 export function scoreRsi(value: number): IndicatorScore {
   let score: number;
   let interpretation: string;
 
   if (value <= 30) {
-    score = 30;
-    interpretation = '과매도 구간은 RSI 점수를 가장 높게 반영합니다.';
-  } else if (value <= 45) {
     score = 20;
-    interpretation = '식어가는 모멘텀은 완전한 투매가 아니어도 매력적인 RSI 점수를 줍니다.';
-  } else if (value < 60) {
+    interpretation = 'RSI 30 이하는 과매도 구간으로 최대 점수를 부여합니다.';
+  } else if (value <= 50) {
     score = 15;
-    interpretation = '중간 범위의 모멘텀은 건설적이지만 큰 할인 구간은 아닙니다.';
+    interpretation = 'RSI 30 초과~50 이하는 식은 모멘텀으로 높은 부분 점수를 부여합니다.';
   } else if (value < 70) {
     score = 5;
-    interpretation = '높아진 모멘텀은 상승 쏠림 가능성 때문에 낮은 점수를 받습니다.';
+    interpretation = 'RSI 50 초과~70 미만은 중립 이상 모멘텀으로 낮은 점수를 부여합니다.';
   } else {
     score = 0;
-    interpretation = '과매수 RSI는 점수를 받지 않습니다.';
+    interpretation = 'RSI 70 이상 과매수 구간은 점수를 받지 않습니다.';
   }
 
   return {
@@ -111,7 +167,7 @@ export function scoreRsi(value: number): IndicatorScore {
     title: 'RSI (14)',
     value: value.toFixed(2),
     score,
-    maxScore: 30,
+    maxScore: 20,
     interpretation,
   };
 }
@@ -121,20 +177,20 @@ export function scoreFearGreed(value: number): IndicatorScore {
   let interpretation: string;
 
   if (value <= 25) {
-    score = 20;
-    interpretation = '극단적 공포는 역발상 매집 구간일 수 있습니다.';
-  } else if (value <= 45) {
     score = 15;
-    interpretation = '공포 심리는 역발상 진입에 여전히 우호적입니다.';
-  } else if (value < 60) {
-    score = 10;
-    interpretation = '균형 잡힌 심리는 중간 점수를 받습니다.';
-  } else if (value < 75) {
-    score = 5;
-    interpretation = '탐욕이 커지고 있어 심리 점수 기여도는 낮습니다.';
+    interpretation = '극단적 공포 구간은 역발상 가산점을 최대로 반영합니다.';
+  } else if (value <= 45) {
+    score = 12;
+    interpretation = '공포 구간은 역발상 진입에 우호적인 심리 점수를 줍니다.';
+  } else if (value <= 60) {
+    score = 8;
+    interpretation = '중립 심리는 중간 심리 점수를 받습니다.';
+  } else if (value <= 75) {
+    score = 4;
+    interpretation = '탐욕 구간은 낮은 심리 점수만 반영합니다.';
   } else {
     score = 0;
-    interpretation = '극단적 탐욕은 심리 점수를 받지 않습니다.';
+    interpretation = '극단적 탐욕 구간은 심리 가산점을 받지 않습니다.';
   }
 
   return {
@@ -142,30 +198,34 @@ export function scoreFearGreed(value: number): IndicatorScore {
     title: '공포·탐욕 지수',
     value: value.toFixed(0),
     score,
-    maxScore: 20,
+    maxScore: 15,
     interpretation,
   };
 }
 
 export function scoreMovingAverages(price: number, ma20: number, ma50: number, usdKrwRate: number | null = null): IndicatorScore {
+  const distancePercent = ((price - ma20) / ma20) * 100;
   let score: number;
   let interpretation: string;
 
-  if (price > ma20 && price > ma50 && ma20 > ma50) {
+  if (ma20 > ma50 && price >= ma20 && distancePercent <= 5) {
     score = 25;
-    interpretation = '가격이 두 이동평균 위에 있고 단기 추세가 앞서고 있습니다.';
-  } else if (price > ma20) {
-    score = 15;
-    interpretation = '가격은 MA20 위에 있지만 추세 확인은 엇갈립니다.';
+    interpretation = 'MA20이 MA50 위에 있고 현재가의 MA20 이격이 5% 이내라 건강한 상승 정렬로 봅니다.';
+  } else if (ma20 > ma50 && price >= ma20 && distancePercent < 15) {
+    score = 20;
+    interpretation = '상승 정렬은 유지되지만 MA20 이격이 5%를 넘어 일부 과열을 감점합니다.';
+  } else if (ma20 > ma50 && price >= ma20) {
+    score = 12;
+    interpretation = '상승 정렬이지만 MA20 이격이 15% 이상이라 과열 감점을 크게 적용합니다.';
+  } else if (ma20 > ma50 && price >= ma50) {
+    score = 10;
+    interpretation = 'MA20 아래 조정 중이지만 MA50 위에 있어 중간 점수를 부여합니다.';
   } else if (price < ma20 && price < ma50 && ma20 < ma50) {
     score = 0;
-    interpretation = '가격이 두 이동평균 아래에 있고 단기 추세도 뒤처져 있습니다.';
-  } else if (price >= ma20 || price >= ma50) {
-    score = 10;
-    interpretation = '엇갈린 이동평균 배열에는 정해진 부분 점수를 적용합니다.';
+    interpretation = '가격이 두 이동평균 아래이고 MA20도 MA50 아래인 약세 정렬입니다.';
   } else {
     score = 5;
-    interpretation = '가격은 이동평균 아래에 있지만 완전한 약세 배열은 아닙니다.';
+    interpretation = '엇갈린 이동평균 배열에는 낮은 결정론적 부분 점수를 적용합니다.';
   }
 
   return {
@@ -178,19 +238,50 @@ export function scoreMovingAverages(price: number, ma20: number, ma50: number, u
   };
 }
 
+export function scoreMfi(value: number): IndicatorScore {
+  let score: number;
+  let interpretation: string;
+
+  if (value <= 20) {
+    score = 20;
+    interpretation = 'MFI 20 이하는 거래량이 동반된 과매도 구간으로 봅니다.';
+  } else if (value <= 35) {
+    score = 16;
+    interpretation = 'MFI 20 초과~35 이하는 자금 흐름이 식은 구간으로 높은 점수를 줍니다.';
+  } else if (value <= 60) {
+    score = 12;
+    interpretation = '중립권 자금 흐름은 중간 점수를 받습니다.';
+  } else if (value < 80) {
+    score = 5;
+    interpretation = '높은 MFI는 과열 가능성 때문에 낮은 점수를 받습니다.';
+  } else {
+    score = 0;
+    interpretation = 'MFI 80 이상은 거래량 동반 과매수 구간으로 점수를 받지 않습니다.';
+  }
+
+  return {
+    id: 'mfi',
+    title: '자금 흐름 MFI (14)',
+    value: value.toFixed(2),
+    score,
+    maxScore: 20,
+    interpretation,
+  };
+}
+
 export function scoreFunding(valuePercent: number): IndicatorScore {
   let score: number;
   let interpretation: string;
 
   if (valuePercent <= 0) {
-    score = 25;
-    interpretation = '중립 또는 음수 펀딩은 과열된 롱 레버리지를 피합니다.';
+    score = 10;
+    interpretation = '음수 또는 중립 펀딩은 과열된 롱 레버리지를 피하므로 높은 점수를 줍니다.';
   } else if (valuePercent <= 0.01) {
-    score = 15;
-    interpretation = '소폭 양수 펀딩은 허용 가능하지만 매력도는 낮습니다.';
+    score = 8;
+    interpretation = '0.01% 이하의 소폭 양수 펀딩은 허용 가능한 선물 환경입니다.';
   } else if (valuePercent <= 0.03) {
-    score = 5;
-    interpretation = '보통 수준의 양수 펀딩은 선물 점수를 낮춥니다.';
+    score = 4;
+    interpretation = '중간 양수 펀딩은 선물 점수를 낮춥니다.';
   } else {
     score = 0;
     interpretation = '높은 양수 펀딩은 롱 포지션 쏠림을 시사합니다.';
@@ -198,11 +289,70 @@ export function scoreFunding(valuePercent: number): IndicatorScore {
 
   return {
     id: 'funding',
-    title: 'Kraken 선물 펀딩비율',
+    title: 'Binance 선물 펀딩비율',
     value: `${valuePercent.toFixed(4)}%`,
     score,
-    maxScore: 25,
+    maxScore: 10,
     interpretation,
+  };
+}
+
+export function scoreFuturesPositioning(input: { fundingPercent: number; oiChangePercent?: number; priceChangePercent?: number }): IndicatorScore {
+  const funding = scoreFunding(input.fundingPercent);
+  let oiScore = 0;
+  let oiText = 'OI 결측: funding 가중치만 사용합니다.';
+
+  if (input.oiChangePercent !== undefined && input.priceChangePercent !== undefined) {
+    if (input.fundingPercent > 0.03 && input.oiChangePercent > 0) {
+      oiScore = 2;
+      oiText = '높은 양수 펀딩과 OI 증가가 겹쳐 레버리지 과열로 크게 감점합니다.';
+    } else if (input.oiChangePercent > 0 && input.priceChangePercent > 0) {
+      oiScore = 10;
+      oiText = '가격 상승과 OI 증가가 함께 나타나 추세 참여가 확인됩니다.';
+    } else if (input.oiChangePercent < 0 && input.priceChangePercent > 0) {
+      oiScore = 6;
+      oiText = '가격은 상승하지만 OI가 줄어 일부 숏커버 가능성을 반영합니다.';
+    } else if (input.oiChangePercent > 0 && input.priceChangePercent < 0) {
+      oiScore = 0;
+      oiText = '가격 하락과 OI 증가는 하락 포지션 강화로 보고 감점합니다.';
+    } else {
+      oiScore = 4;
+      oiText = '가격과 OI 방향성이 강하지 않아 낮은 부분 점수를 적용합니다.';
+    }
+  }
+
+  return {
+    id: 'futures-positioning',
+    title: '선물 펀딩비·미체결약정',
+    value:
+      input.oiChangePercent === undefined
+        ? `${input.fundingPercent.toFixed(4)}% / OI 결측`
+        : `${input.fundingPercent.toFixed(4)}% / OI ${input.oiChangePercent.toFixed(2)}%`,
+    score: funding.score + oiScore,
+    maxScore: input.oiChangePercent === undefined ? 10 : 20,
+    interpretation: `${funding.interpretation} ${oiText}`,
+  };
+}
+
+export function normalizeEthBtcStrengthScore(current: number, ma20: number): number {
+  if (current <= 0 || ma20 <= 0) {
+    throw new Error('ETH/BTC values must be positive.');
+  }
+  const distancePercent = ((current - ma20) / ma20) * 100;
+  if (distancePercent >= 2) return 100;
+  if (distancePercent <= -2) return 0;
+  return Math.round(((distancePercent + 2) / 4) * 100);
+}
+
+export function scoreEthBtcStrength(current: number, ma20: number): IndicatorScore {
+  const score = normalizeEthBtcStrengthScore(current, ma20);
+  return {
+    id: 'eth-btc-strength',
+    title: 'ETH/BTC 상대강도',
+    value: `${current.toFixed(6)} / MA20 ${ma20.toFixed(6)}`,
+    score,
+    maxScore: 100,
+    interpretation: 'ETH 최종 점수는 기본 점수 95%와 ETH/BTC 20봉 상대강도 정규화 점수 5%를 혼합합니다.',
   };
 }
 
@@ -218,22 +368,55 @@ export function buildAssetSignal(input: {
   symbol: 'BTC' | 'ETH';
   name: string;
   price: number;
-  closes: number[];
+  closes?: number[];
+  candles?: MarketCandle[];
   fearGreed: number;
   fundingPercent: number;
+  oiChangePercent?: number;
+  priceChangePercent?: number;
+  ethBtcCurrent?: number;
+  ethBtcMa20?: number;
   usdKrwRate?: number | null;
   stale?: boolean;
 }): AssetSignal {
-  const rsi = calculateRsi(input.closes, 14);
-  const ma20 = calculateMovingAverage(input.closes, 20);
-  const ma50 = calculateMovingAverage(input.closes, 50);
+  const closes = input.candles?.map((candle) => candle.close) ?? input.closes;
+  if (!closes) {
+    throw new Error('Need closes or candles to build asset signals.');
+  }
+
+  const rsi = calculateRsi(closes, 14);
+  const ma20 = calculateMovingAverage(closes, 20);
+  const ma50 = calculateMovingAverage(closes, 50);
   const indicators = [
-    scoreRsi(rsi),
-    scoreFearGreed(input.fearGreed),
     scoreMovingAverages(input.price, ma20, ma50, input.usdKrwRate ?? null),
-    scoreFunding(input.fundingPercent),
+    scoreRsi(rsi),
   ];
-  const overallScore = indicators.reduce((total, indicator) => total + indicator.score, 0);
+  const missingFeatures: string[] = [];
+
+  if (input.candles) {
+    indicators.push(scoreMfi(calculateMfi(input.candles, 14)));
+  } else {
+    missingFeatures.push('mfi');
+  }
+
+  const futures = scoreFuturesPositioning({
+    fundingPercent: input.fundingPercent,
+    oiChangePercent: input.oiChangePercent,
+    priceChangePercent: input.priceChangePercent,
+  });
+  indicators.push(futures, scoreFearGreed(input.fearGreed));
+  if (input.oiChangePercent === undefined || input.priceChangePercent === undefined) {
+    missingFeatures.push('open-interest');
+  }
+
+  const rawScore = indicators.reduce((total, indicator) => total + indicator.score, 0);
+  const availableMaxScore = indicators.reduce((total, indicator) => total + indicator.maxScore, 0);
+  const baseScore = clampScore(Math.round((rawScore / availableMaxScore) * 100));
+  const ethBtcIndicator =
+    input.symbol === 'ETH' && input.ethBtcCurrent !== undefined && input.ethBtcMa20 !== undefined
+      ? scoreEthBtcStrength(input.ethBtcCurrent, input.ethBtcMa20)
+      : null;
+  const overallScore = ethBtcIndicator ? clampScore(Math.round(baseScore * 0.95 + ethBtcIndicator.score * 0.05)) : baseScore;
 
   return {
     symbol: input.symbol,
@@ -242,7 +425,9 @@ export function buildAssetSignal(input: {
     overallScore,
     signal: signalForScore(overallScore),
     stale: input.stale ?? false,
-    indicators,
+    indicators: ethBtcIndicator ? [...indicators, ethBtcIndicator] : indicators,
+    missingFeatures,
+    scorePolicy: SCORE_POLICY,
   };
 }
 
@@ -266,4 +451,12 @@ export function formatUsdWithKrw(value: number, usdKrwRate: number | null): stri
   const usd = formatUsd(value);
   if (usdKrwRate === null) return usd;
   return `${usd} · ${formatKrw(value * usdKrwRate)}`;
+}
+
+function typicalPrice(candle: MarketCandle): number {
+  return (candle.high + candle.low + candle.close) / 3;
+}
+
+function clampScore(score: number): number {
+  return Math.min(100, Math.max(0, score));
 }

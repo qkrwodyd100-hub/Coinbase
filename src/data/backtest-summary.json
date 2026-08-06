@@ -1,0 +1,94 @@
+{
+  "generatedAt": "2026-08-06T02:58:18.908Z",
+  "rows": [
+    {
+      "asset": "BTC",
+      "interval": "4h",
+      "signalType": "strong-buy",
+      "signalCount": 2,
+      "hitCount": 2,
+      "hitRatePercent": 100,
+      "averageCloseReturnPercent": 6.36,
+      "averageMaxFavorablePercent": 6.48,
+      "averageMaxAdversePercent": -1.57
+    },
+    {
+      "asset": "ETH",
+      "interval": "4h",
+      "signalType": "strong-buy",
+      "signalCount": 2,
+      "hitCount": 0,
+      "hitRatePercent": 0,
+      "averageCloseReturnPercent": -0.47,
+      "averageMaxFavorablePercent": 0.86,
+      "averageMaxAdversePercent": -1.65
+    },
+    {
+      "asset": "BTC",
+      "interval": "1d",
+      "signalType": "strong-sell",
+      "signalCount": 2,
+      "hitCount": 1,
+      "hitRatePercent": 50,
+      "averageCloseReturnPercent": 4.76,
+      "averageMaxFavorablePercent": 2.89,
+      "averageMaxAdversePercent": -7.78
+    },
+    {
+      "asset": "ETH",
+      "interval": "1d",
+      "signalType": "strong-sell",
+      "signalCount": 1,
+      "hitCount": 1,
+      "hitRatePercent": 100,
+      "averageCloseReturnPercent": -5.36,
+      "averageMaxFavorablePercent": 7.07,
+      "averageMaxAdversePercent": -2.69
+    }
+  ],
+  "dataLimitations": [
+    "missing indicators are explicitly excluded and available weights are normalized",
+    "missing indicators are explicitly excluded and available weights are normalized; full-data and limited-data results must be compared separately.",
+    "public no-key data can have delayed archive files; reports include data start/end and excluded signal counts.",
+    "Fear & Greed is daily and is forward-filled for 4h candles by UTC date."
+  ],
+  "source": "Binance public no-key + Alternative.me public no-key",
+  "reports": [
+    {
+      "asset": "BTC",
+      "interval": "4h",
+      "dataStart": "2025-08-14T04:00:00.000Z",
+      "dataEnd": "2026-08-05T16:00:00.000Z",
+      "signalCount": 2,
+      "excludedSignals": 0,
+      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next closed candle open/first observable next bar price to avoid look-ahead bias."
+    },
+    {
+      "asset": "ETH",
+      "interval": "4h",
+      "dataStart": "2025-08-14T04:00:00.000Z",
+      "dataEnd": "2026-08-05T16:00:00.000Z",
+      "signalCount": 2,
+      "excludedSignals": 0,
+      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next closed candle open/first observable next bar price to avoid look-ahead bias."
+    },
+    {
+      "asset": "BTC",
+      "interval": "1d",
+      "dataStart": "2024-09-25T00:00:00.000Z",
+      "dataEnd": "2026-08-05T00:00:00.000Z",
+      "signalCount": 2,
+      "excludedSignals": 0,
+      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next closed candle open/first observable next bar price to avoid look-ahead bias."
+    },
+    {
+      "asset": "ETH",
+      "interval": "1d",
+      "dataStart": "2024-09-25T00:00:00.000Z",
+      "dataEnd": "2026-08-05T00:00:00.000Z",
+      "signalCount": 1,
+      "excludedSignals": 0,
+      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next closed candle open/first observable next bar price to avoid look-ahead bias."
+    }
+  ]
+}

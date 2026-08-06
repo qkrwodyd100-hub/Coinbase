@@ -11,7 +11,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage=false",
     "test:watch": "vitest --coverage=false",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "backtest": "node --experimental-strip-types scripts/generate-backtest-report.ts",
+    "backtest:fixture": "node --experimental-strip-types scripts/generate-backtest-report.ts --fixture",
+    "backtest:smoke": "node --experimental-strip-types scripts/generate-backtest-report.ts --smoke"
   },
   "dependencies": {
     "@tailwindcss/postcss": "latest",

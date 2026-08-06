@@ -36,7 +36,7 @@ const okPayload = {
           maxScore: 25,
           interpretation: '가격이 두 이동평균 위에 있고 단기 추세가 앞서고 있습니다.',
         },
-        { id: 'funding', title: 'Kraken 선물 펀딩비율', value: '-0.0010%', score: 25, maxScore: 25, interpretation: '중립 또는 음수 펀딩은 과열된 롱 레버리지를 피합니다.' },
+        { id: 'futures-positioning', title: '선물 펀딩비·미체결약정', value: '-0.0010% / OI 2.00%', score: 20, maxScore: 20, interpretation: '음수 또는 중립 펀딩은 과열된 롱 레버리지를 피합니다.' },
       ],
     },
     {
@@ -57,7 +57,7 @@ const okPayload = {
           maxScore: 25,
           interpretation: '가격은 MA20 위에 있지만 추세 확인은 엇갈립니다.',
         },
-        { id: 'funding', title: 'Kraken 선물 펀딩비율', value: '0.0200%', score: 5, maxScore: 25, interpretation: '보통 수준의 양수 펀딩은 선물 점수를 낮춥니다.' },
+        { id: 'futures-positioning', title: '선물 펀딩비·미체결약정', value: '0.0200% / OI -1.00%', score: 10, maxScore: 20, interpretation: '중간 양수 펀딩은 선물 점수를 낮춥니다.' },
       ],
     },
   ],
@@ -80,7 +80,7 @@ describe('dashboard behavior', () => {
     expect(screen.getByRole('heading', { name: 'BTC / ETH 시그널 대시보드' })).toBeInTheDocument();
     expect(screen.getAllByText('$65,000 · ₩89,050,000').length).toBeGreaterThan(0);
     expect(screen.getAllByText('강력 매수').length).toBeGreaterThan(0);
-    expect(screen.getByRole('heading', { name: 'Kraken 선물 펀딩비율' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '선물 펀딩비·미체결약정' })).toBeInTheDocument();
     const bitcoinMeter = screen.getByRole('meter', { name: /비트코인 시그널 점수/i });
     expect(bitcoinMeter).toHaveAttribute('aria-valuenow', '85');
     expect(bitcoinMeter.querySelector('circle.stroke-emerald-300')).toBeInTheDocument();

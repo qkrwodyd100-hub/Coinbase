@@ -65,7 +65,7 @@ export default function Home() {
             <p className="text-sm font-medium uppercase tracking-[0.28em] text-cyan-200/80 sm:tracking-[0.32em]">실시간 시장 시그널</p>
             <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-5xl">BTC / ETH 시그널 대시보드</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
-              점수는 RSI(14), Alternative.me 공포·탐욕 지수, MA20/MA50 추세 정렬, Kraken 선물 펀딩비율을 종합합니다.
+              점수는 MA20/MA50, RSI(14), MFI(14), Binance 선물 펀딩비·미체결약정, Alternative.me 공포·탐욕 지수를 종합합니다.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -106,6 +106,7 @@ export default function Home() {
             onSelect={setSelectedSymbol}
             stale={hasStaleData || selectedAsset.stale}
             usdKrwRate={payload?.usdKrwRate ?? null}
+            backtestSummary={payload?.backtestSummary ?? null}
           />
         ) : null}
       </section>
@@ -120,6 +121,7 @@ function DashboardContent({
   onSelect,
   stale,
   usdKrwRate,
+  backtestSummary,
 }: {
   assets: AssetSignal[];
   selectedAsset: AssetSignal;
@@ -127,6 +129,7 @@ function DashboardContent({
   onSelect: (symbol: 'BTC' | 'ETH') => void;
   stale: boolean;
   usdKrwRate: number | null;
+  backtestSummary: DashboardPayload['backtestSummary'] | null;
 }) {
   return (
     <div className="grid min-w-0 flex-1 gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
@@ -158,9 +161,10 @@ function DashboardContent({
         <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-5 text-sm leading-6 text-slate-300">
           <h2 className="font-bold text-slate-100">점수 산정 메모</h2>
           <p className="mt-2">
-            이동평균이 엇갈린 경우 가격이 MA20 또는 MA50 이상이면 10점, 두 이동평균 아래지만 완전한 약세 배열이 아니면 5점, 완전한 약세 배열이면 0점을 부여합니다.
+            지표 결측은 0점이나 만점으로 숨기지 않고 사용 가능한 가중치만 100점으로 정규화합니다. ETH는 기본 점수 95%와 ETH/BTC 상대강도 5%를 혼합합니다.
           </p>
         </div>
+        {backtestSummary ? <BacktestSummary summary={backtestSummary} /> : null}
       </aside>
 
       <section className="min-w-0 rounded-[2rem] border border-white/10 bg-white/[0.07] p-5 shadow-2xl shadow-black/30 backdrop-blur sm:p-7">
@@ -239,6 +243,30 @@ function ScoreGauge({ assetName, score, tone, label }: { assetName: string; scor
         <div className="text-sm text-slate-400">100점 만점</div>
         <SignalPill tone={tone}>{label}</SignalPill>
       </div>
+    </div>
+  );
+}
+
+function BacktestSummary({ summary }: { summary: NonNullable<DashboardPayload['backtestSummary']> }) {
+  return (
+    <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-5 text-sm leading-6 text-slate-300">
+      <h2 className="font-bold text-slate-100">복합 백테스트 요약</h2>
+      <p className="mt-2 text-xs text-slate-400">
+        {summary.source} · {new Date(summary.generatedAt).toLocaleDateString('ko-KR', { timeZone: 'UTC' })}
+      </p>
+      <div className="mt-4 space-y-3">
+        {summary.rows.slice(0, 4).map((row) => (
+          <div key={`${row.asset}-${row.interval}-${row.signalType}`} className="rounded-2xl bg-black/20 p-3">
+            <div className="font-bold text-slate-100">
+              {row.asset} {row.interval} {row.signalType === 'strong-buy' ? '강력 매수' : '강력 매도'}
+            </div>
+            <div className="mt-1 text-slate-300">
+              신호 {row.signalCount}회 · 적중률 {row.hitRatePercent}% · 평균 종가 수익률 {row.averageCloseReturnPercent}%
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-amber-100">룩어헤드 방지: 캔들 확정 후 다음 관측 가능 봉의 시가를 진입가로 사용합니다.</p>
     </div>
   );
 }
