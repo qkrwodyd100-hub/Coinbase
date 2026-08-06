@@ -23,7 +23,7 @@ const payload = {
           maxScore: 25,
           interpretation: '가격이 두 이동평균 위에 있고 단기 추세가 앞서고 있습니다.',
         },
-        { id: 'funding', title: '선물 펀딩', value: '-0.0010%', score: 25, maxScore: 25, interpretation: '중립 또는 음수 펀딩은 과열된 롱 레버리지를 피합니다.' },
+        { id: 'funding', title: 'Kraken 선물 펀딩비율', value: '-0.0010%', score: 25, maxScore: 25, interpretation: '중립 또는 음수 펀딩은 과열된 롱 레버리지를 피합니다.' },
       ],
     },
     {
@@ -44,7 +44,7 @@ const payload = {
           maxScore: 25,
           interpretation: '가격은 MA20 위에 있지만 추세 확인은 엇갈립니다.',
         },
-        { id: 'funding', title: '선물 펀딩', value: '0.0200%', score: 5, maxScore: 25, interpretation: '보통 수준의 양수 펀딩은 선물 점수를 낮춥니다.' },
+        { id: 'funding', title: 'Kraken 선물 펀딩비율', value: '0.0200%', score: 5, maxScore: 25, interpretation: '보통 수준의 양수 펀딩은 선물 점수를 낮춥니다.' },
       ],
     },
   ],
@@ -104,7 +104,7 @@ test('dashboard renders Korean live data, KRW prices, and supports asset switchi
   await expect(page.getByRole('heading', { name: /비트코인 시그널/i })).toBeVisible();
   await expect(page.getByRole('tab', { name: /btc.*비트코인/i }).getByText('$65,000 · ₩89,050,000')).toBeVisible();
   await expect(page.getByText('강력 매수').last()).toBeVisible();
-  await expect(page.getByText(/Kraken 선물 펀딩비율/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Kraken 선물 펀딩비율' })).toBeVisible();
   const btcMeter = page.getByRole('meter', { name: /비트코인 시그널 점수/i });
   await expect(btcMeter.locator('circle.stroke-emerald-300')).toBeVisible();
   await expect(btcMeter.getByText('강력 매수')).toHaveClass(/text-emerald-100/);

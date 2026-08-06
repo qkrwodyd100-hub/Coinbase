@@ -198,7 +198,7 @@ export function scoreFunding(valuePercent: number): IndicatorScore {
 
   return {
     id: 'funding',
-    title: '선물 펀딩',
+    title: 'Kraken 선물 펀딩비율',
     value: `${valuePercent.toFixed(4)}%`,
     score,
     maxScore: 25,

@@ -36,7 +36,7 @@ const okPayload = {
           maxScore: 25,
           interpretation: '가격이 두 이동평균 위에 있고 단기 추세가 앞서고 있습니다.',
         },
-        { id: 'funding', title: '선물 펀딩', value: '-0.0010%', score: 25, maxScore: 25, interpretation: '중립 또는 음수 펀딩은 과열된 롱 레버리지를 피합니다.' },
+        { id: 'funding', title: 'Kraken 선물 펀딩비율', value: '-0.0010%', score: 25, maxScore: 25, interpretation: '중립 또는 음수 펀딩은 과열된 롱 레버리지를 피합니다.' },
       ],
     },
     {
@@ -57,7 +57,7 @@ const okPayload = {
           maxScore: 25,
           interpretation: '가격은 MA20 위에 있지만 추세 확인은 엇갈립니다.',
         },
-        { id: 'funding', title: '선물 펀딩', value: '0.0200%', score: 5, maxScore: 25, interpretation: '보통 수준의 양수 펀딩은 선물 점수를 낮춥니다.' },
+        { id: 'funding', title: 'Kraken 선물 펀딩비율', value: '0.0200%', score: 5, maxScore: 25, interpretation: '보통 수준의 양수 펀딩은 선물 점수를 낮춥니다.' },
       ],
     },
   ],
@@ -80,7 +80,7 @@ describe('dashboard behavior', () => {
     expect(screen.getByRole('heading', { name: 'BTC / ETH 시그널 대시보드' })).toBeInTheDocument();
     expect(screen.getAllByText('$65,000 · ₩89,050,000').length).toBeGreaterThan(0);
     expect(screen.getAllByText('강력 매수').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Kraken 선물 펀딩비율/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Kraken 선물 펀딩비율' })).toBeInTheDocument();
     const bitcoinMeter = screen.getByRole('meter', { name: /비트코인 시그널 점수/i });
     expect(bitcoinMeter).toHaveAttribute('aria-valuenow', '85');
     expect(bitcoinMeter.querySelector('circle.stroke-emerald-300')).toBeInTheDocument();
@@ -116,6 +116,40 @@ describe('dashboard behavior', () => {
     const meter = await screen.findByRole('meter', { name: /비트코인 시그널 점수/i });
     expect(meter.querySelector('circle.stroke-rose-300')).toBeInTheDocument();
     expect(within(meter).getByText('강력 매도')).toHaveClass('text-rose-100');
+  });
+
+  it.each([
+    ['강력 매수', 'positive', 'stroke-emerald-300', 'text-emerald-100'],
+    ['매수', 'positive', 'stroke-emerald-300', 'text-emerald-100'],
+    ['관망', 'neutral', 'stroke-amber-300', 'text-amber-100'],
+    ['매도', 'negative', 'stroke-rose-300', 'text-rose-100'],
+    ['강력 매도', 'negative', 'stroke-rose-300', 'text-rose-100'],
+  ] as const)('maps %s to its dynamic signal color in the pill and score gauge', async (label, tone, gaugeClass, pillClass) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          ...okPayload,
+          assets: okPayload.assets.map((asset) =>
+            asset.symbol === 'BTC'
+              ? {
+                  ...asset,
+                  signal: { label, tone },
+                  overallScore: label === '강력 매수' ? 85 : label === '매수' ? 65 : label === '관망' ? 50 : label === '매도' ? 30 : 10,
+                }
+              : asset,
+          ),
+        }),
+      }),
+    );
+
+    render(createElement(Home));
+
+    const meter = await screen.findByRole('meter', { name: /비트코인 시그널 점수/i });
+    expect(meter.querySelector(`circle.${gaugeClass}`)).toBeInTheDocument();
+    expect(within(meter).getByText(label)).toHaveClass(pillClass);
+    expect(screen.getByRole('tab', { name: new RegExp(`btc.*${label}`, 'i') })).toHaveTextContent(label);
   });
 
   it('shows an unobtrusive Korean state when KRW conversion is unavailable', async () => {
