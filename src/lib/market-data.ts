@@ -15,20 +15,23 @@ const ASSETS: AssetConfig[] = [
 const KRAKEN_BASE = 'https://api.kraken.com/0/public';
 const KRAKEN_FUTURES_BASE = 'https://futures.kraken.com/derivatives/api/v3';
 const FEAR_GREED_URL = 'https://api.alternative.me/fng/?limit=1&format=json';
+const USD_KRW_URL = 'https://api.frankfurter.app/latest?from=USD&to=KRW';
 const REQUEST_TIMEOUT_MS = 8_000;
 const REVALIDATE_SECONDS = 55;
 
 export async function getDashboardPayload(): Promise<DashboardPayload> {
-  const fearGreed = await getFearGreedIndex();
-  const assets = await Promise.all(ASSETS.map((asset) => getAssetSignal(asset, fearGreed)));
+  const [fearGreed, usdKrwRate] = await Promise.all([getFearGreedIndex(), getUsdKrwRate()]);
+  const assets = await Promise.all(ASSETS.map((asset) => getAssetSignal(asset, fearGreed, usdKrwRate)));
 
   return {
     asOf: new Date().toISOString(),
+    usdKrwRate,
+    fxUnavailable: usdKrwRate === null,
     assets,
   };
 }
 
-async function getAssetSignal(asset: AssetConfig, fearGreed: number): Promise<AssetSignal> {
+async function getAssetSignal(asset: AssetConfig, fearGreed: number, usdKrwRate: number | null): Promise<AssetSignal> {
   const [price, closes, fundingPercent] = await Promise.all([
     getTickerPrice(asset.krakenPair),
     getDailyCloses(asset.krakenPair),
@@ -42,7 +45,23 @@ async function getAssetSignal(asset: AssetConfig, fearGreed: number): Promise<As
     closes,
     fearGreed,
     fundingPercent,
+    usdKrwRate,
   });
+}
+
+async function getUsdKrwRate(): Promise<number | null> {
+  let payload: unknown;
+  try {
+    payload = await fetchJson(USD_KRW_URL);
+  } catch {
+    return null;
+  }
+
+  if (!isRecord(payload) || !isRecord(payload.rates)) {
+    throw new Error('Unexpected USD to KRW exchange rate payload.');
+  }
+
+  return parsePositiveFiniteUnknown(payload.rates.KRW, 'USD to KRW exchange rate');
 }
 
 async function getTickerPrice(symbol: string): Promise<number> {
@@ -139,6 +158,17 @@ function parseFiniteNumber(value: string, label: string): number {
 
 function parsePositiveFiniteNumber(value: string, label: string): number {
   const parsed = parseFiniteNumber(value, label);
+  if (parsed <= 0) {
+    throw new Error(`${label} must be greater than zero.`);
+  }
+  return parsed;
+}
+
+function parsePositiveFiniteUnknown(value: unknown, label: string): number {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${label} is not a finite number.`);
+  }
   if (parsed <= 0) {
     throw new Error(`${label} must be greater than zero.`);
   }

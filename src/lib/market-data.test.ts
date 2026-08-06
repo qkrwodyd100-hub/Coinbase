@@ -6,6 +6,8 @@ type Overrides = {
   btcPrice?: string;
   btcClose?: string;
   btcFunding?: number;
+  usdKrwRate?: number | string | null;
+  failFx?: boolean;
 };
 
 function installMarketFetch(overrides: Overrides = {}) {
@@ -15,7 +17,10 @@ function installMarketFetch(overrides: Overrides = {}) {
       const url = String(input);
       let payload: unknown;
 
-      if (url.includes('alternative.me')) {
+      if (url.includes('frankfurter.app')) {
+        if (overrides.failFx) return { ok: false, json: async () => ({}) };
+        payload = { rates: { KRW: overrides.usdKrwRate ?? 1370 } };
+      } else if (url.includes('alternative.me')) {
         payload = { data: [{ value: overrides.fearGreed ?? '40' }] };
       } else if (url.includes('api.kraken.com') && url.includes('/Ticker')) {
         const isBtc = url.includes('XBTUSD');
@@ -52,6 +57,8 @@ describe('market payload validation', () => {
     [{ btcClose: '0' }, /close must be greater than zero/i],
     [{ fearGreed: '101' }, /fear & greed must be between 0 and 100/i],
     [{ btcFunding: 101 }, /funding must be between -100 and 100/i],
+    [{ usdKrwRate: -1 }, /USD to KRW exchange rate must be greater than zero/i],
+    [{ usdKrwRate: 'not-a-number' }, /USD to KRW exchange rate is not a finite number/i],
   ] satisfies Array<[Overrides, RegExp]>)('rejects invalid upstream numeric domains: %#', async (overrides, message) => {
     installMarketFetch(overrides);
 
@@ -63,10 +70,22 @@ describe('market payload validation', () => {
 
     const payload = await getDashboardPayload();
 
+    expect(payload.usdKrwRate).toBe(1370);
+    expect(payload.fxUnavailable).toBe(false);
     expect(payload.assets.map((asset) => asset.symbol)).toEqual(['BTC', 'ETH']);
     expect(payload.assets.every((asset) => asset.overallScore >= 0 && asset.overallScore <= 100)).toBe(true);
     const urls = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
     expect(urls).not.toContainEqual(expect.stringContaining('binance.com'));
     expect(urls).not.toContainEqual(expect.stringContaining('bybit.com'));
+  });
+
+  it('keeps USD market data when the FX source temporarily fails', async () => {
+    installMarketFetch({ failFx: true });
+
+    const payload = await getDashboardPayload();
+
+    expect(payload.usdKrwRate).toBeNull();
+    expect(payload.fxUnavailable).toBe(true);
+    expect(payload.assets.map((asset) => asset.price)).toEqual([65000, 3200]);
   });
 });

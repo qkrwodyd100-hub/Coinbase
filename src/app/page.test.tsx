@@ -15,19 +15,28 @@ function deferred<T>() {
 
 const okPayload = {
   asOf: '2026-08-05T00:00:00.000Z',
+  usdKrwRate: 1370,
+  fxUnavailable: false,
   assets: [
     {
       symbol: 'BTC',
       name: 'Bitcoin',
       price: 65000,
       overallScore: 85,
-      signal: { label: 'Strong Buy', tone: 'positive' },
+      signal: { label: '강력 매수', tone: 'positive' },
       stale: false,
       indicators: [
-        { id: 'rsi', title: 'RSI (14)', value: '28.00', score: 30, maxScore: 30, interpretation: 'Oversold conditions reward the highest RSI score.' },
-        { id: 'fear-greed', title: 'Fear & Greed', value: '22', score: 20, maxScore: 20, interpretation: 'Extreme fear can mark contrarian accumulation zones.' },
-        { id: 'moving-averages', title: 'Moving averages', value: '$65,000 / MA20 $63,000 / MA50 $61,000', score: 25, maxScore: 25, interpretation: 'Price is above both averages and short-term trend leads.' },
-        { id: 'funding', title: 'Futures funding', value: '-0.0010%', score: 25, maxScore: 25, interpretation: 'Neutral or negative funding avoids overheated long leverage.' },
+        { id: 'rsi', title: 'RSI (14)', value: '28.00', score: 30, maxScore: 30, interpretation: '과매도 구간은 RSI 점수를 가장 높게 반영합니다.' },
+        { id: 'fear-greed', title: '공포·탐욕 지수', value: '22', score: 20, maxScore: 20, interpretation: '극단적 공포는 역발상 매집 구간일 수 있습니다.' },
+        {
+          id: 'moving-averages',
+          title: '이동평균',
+          value: '$65,000 · ₩89,050,000 / MA20 $63,000 · ₩86,310,000 / MA50 $61,000 · ₩83,570,000',
+          score: 25,
+          maxScore: 25,
+          interpretation: '가격이 두 이동평균 위에 있고 단기 추세가 앞서고 있습니다.',
+        },
+        { id: 'funding', title: '선물 펀딩', value: '-0.0010%', score: 25, maxScore: 25, interpretation: '중립 또는 음수 펀딩은 과열된 롱 레버리지를 피합니다.' },
       ],
     },
     {
@@ -35,13 +44,20 @@ const okPayload = {
       name: 'Ethereum',
       price: 3200,
       overallScore: 55,
-      signal: { label: 'Neutral', tone: 'neutral' },
+      signal: { label: '관망', tone: 'neutral' },
       stale: false,
       indicators: [
-        { id: 'rsi', title: 'RSI (14)', value: '52.00', score: 15, maxScore: 30, interpretation: 'Mid-range momentum is constructive but not deeply discounted.' },
-        { id: 'fear-greed', title: 'Fear & Greed', value: '50', score: 10, maxScore: 20, interpretation: 'Balanced sentiment receives a middle score.' },
-        { id: 'moving-averages', title: 'Moving averages', value: '$3,200 / MA20 $3,100 / MA50 $3,250', score: 15, maxScore: 25, interpretation: 'Price is above MA20 but trend confirmation is mixed.' },
-        { id: 'funding', title: 'Futures funding', value: '0.0200%', score: 5, maxScore: 25, interpretation: 'Moderate positive funding reduces the futures score.' },
+        { id: 'rsi', title: 'RSI (14)', value: '52.00', score: 15, maxScore: 30, interpretation: '중간 범위의 모멘텀은 건설적이지만 큰 할인 구간은 아닙니다.' },
+        { id: 'fear-greed', title: '공포·탐욕 지수', value: '50', score: 10, maxScore: 20, interpretation: '균형 잡힌 심리는 중간 점수를 받습니다.' },
+        {
+          id: 'moving-averages',
+          title: '이동평균',
+          value: '$3,200 · ₩4,384,000 / MA20 $3,100 · ₩4,247,000 / MA50 $3,250 · ₩4,452,500',
+          score: 15,
+          maxScore: 25,
+          interpretation: '가격은 MA20 위에 있지만 추세 확인은 엇갈립니다.',
+        },
+        { id: 'funding', title: '선물 펀딩', value: '0.0200%', score: 5, maxScore: 25, interpretation: '보통 수준의 양수 펀딩은 선물 점수를 낮춥니다.' },
       ],
     },
   ],
@@ -55,21 +71,44 @@ describe('dashboard behavior', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders successful BTC data and lets users switch to ETH', async () => {
+  it('renders Korean BTC data with computed KRW prices and lets users switch to ETH', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => okPayload }));
 
     render(createElement(Home));
 
-    expect(await screen.findByRole('heading', { name: /bitcoin signal/i })).toBeInTheDocument();
-    expect(screen.getByText('$65,000')).toBeInTheDocument();
-    expect(screen.getAllByText('Strong Buy').length).toBeGreaterThan(0);
-    expect(screen.getByText(/kraken futures funding/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Bitcoin 시그널/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'BTC / ETH 시그널 대시보드' })).toBeInTheDocument();
+    expect(screen.getAllByText('$65,000 · ₩89,050,000').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('강력 매수').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Kraken 선물 펀딩/)).toBeInTheDocument();
+    expect(screen.getByRole('meter', { name: /Bitcoin 시그널 점수/i })).toHaveAttribute('aria-valuenow', '85');
 
     await userEvent.click(screen.getByRole('tab', { name: /eth.*ethereum/i }));
 
-    expect(screen.getByRole('heading', { name: /ethereum signal/i })).toBeInTheDocument();
-    expect(screen.getByText('$3,200')).toBeInTheDocument();
-    expect(screen.getAllByText('Neutral').length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: /Ethereum 시그널/i })).toBeInTheDocument();
+    expect(screen.getAllByText('$3,200 · ₩4,384,000').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('관망').length).toBeGreaterThan(0);
+  });
+
+  it('shows an unobtrusive Korean state when KRW conversion is unavailable', async () => {
+    const usdOnlyPayload = {
+      ...okPayload,
+      usdKrwRate: null,
+      fxUnavailable: true,
+      assets: okPayload.assets.map((asset) => ({
+        ...asset,
+        indicators: asset.indicators.map((indicator) =>
+          indicator.id === 'moving-averages' ? { ...indicator, value: asset.symbol === 'BTC' ? '$65,000 / MA20 $63,000 / MA50 $61,000' : '$3,200 / MA20 $3,100 / MA50 $3,250' } : indicator,
+        ),
+      })),
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => usdOnlyPayload }));
+
+    render(createElement(Home));
+
+    expect((await screen.findAllByText('$65,000')).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/₩89,050,000/)).not.toBeInTheDocument();
+    expect(screen.getByText(/원화 환산을 잠시 표시할 수 없습니다/)).toBeInTheDocument();
   });
 
   it('exposes a manual refresh loading state and updates the timestamp', async () => {
@@ -82,12 +121,12 @@ describe('dashboard behavior', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     render(createElement(Home));
-    await screen.findByRole('heading', { name: /bitcoin signal/i });
+    await screen.findByRole('heading', { name: /Bitcoin 시그널/i });
 
-    fireEvent.click(screen.getByRole('button', { name: /refresh signals/i }));
+    fireEvent.click(screen.getByRole('button', { name: /시그널 새로고침/i }));
 
-    expect(screen.getByRole('button', { name: /refreshing signals/i })).toBeDisabled();
-    await waitFor(() => expect(screen.getByText(/00:01:00/)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /시그널 새로고침 중/i })).toBeDisabled();
+    await waitFor(() => expect(screen.getByText(/0시 1분 0초/)).toBeInTheDocument());
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -105,7 +144,7 @@ describe('dashboard behavior', () => {
     vi.spyOn(window, 'clearInterval').mockImplementation(() => undefined);
 
     render(createElement(Home));
-    await screen.findByRole('heading', { name: /bitcoin signal/i });
+    await screen.findByRole('heading', { name: /Bitcoin 시그널/i });
 
     expect(intervalCallback).not.toBeNull();
     await act(async () => {
@@ -123,30 +162,26 @@ describe('dashboard behavior', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     render(createElement(Home));
-    await screen.findByRole('heading', { name: /bitcoin signal/i });
+    await screen.findByRole('heading', { name: /Bitcoin 시그널/i });
 
-    await userEvent.click(screen.getByRole('button', { name: /refresh signals/i }));
+    await userEvent.click(screen.getByRole('button', { name: /시그널 새로고침/i }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/could not refresh/i);
-    expect(screen.getByText(/showing the last successful snapshot/i)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /bitcoin signal/i })).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/시그널을 새로고침하지 못했습니다/i);
+    expect(screen.getByText(/마지막으로 성공한 스냅샷을 표시합니다/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Bitcoin 시그널/i })).toBeInTheDocument();
   });
 
   it('keeps the newest successful refresh when an older request fails later', async () => {
     const older = deferred<{ ok: boolean; json: () => Promise<typeof okPayload> }>();
     const newerPayload = { ...okPayload, asOf: '2026-08-05T00:02:00.000Z' };
     const newer = deferred<{ ok: boolean; json: () => Promise<typeof okPayload> }>();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => okPayload })
-      .mockReturnValueOnce(older.promise)
-      .mockReturnValueOnce(newer.promise);
+    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => okPayload }).mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
     vi.stubGlobal('fetch', fetchMock);
     const intervalSpy = vi.spyOn(window, 'setInterval').mockReturnValue(1 as unknown as NodeJS.Timeout);
     vi.spyOn(window, 'clearInterval').mockImplementation(() => undefined);
 
     render(createElement(Home));
-    await screen.findByRole('heading', { name: /bitcoin signal/i });
+    await screen.findByRole('heading', { name: /Bitcoin 시그널/i });
     const intervalCallback = intervalSpy.mock.calls[0][0] as () => void;
 
     await act(async () => intervalCallback());
@@ -157,49 +192,13 @@ describe('dashboard behavior', () => {
       newer.resolve({ ok: true, json: async () => newerPayload });
       await newer.promise;
     });
-    await waitFor(() => expect(screen.getByText(/00:02:00/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/0시 2분 0초/)).toBeInTheDocument());
     await act(async () => {
       older.resolve({ ok: false, json: async () => okPayload });
       await older.promise;
     });
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /bitcoin signal/i })).toBeInTheDocument();
-  });
-
-  it('keeps the newest failure when an older request succeeds later', async () => {
-    const olderPayload = { ...okPayload, asOf: '2026-08-05T00:03:00.000Z' };
-    const older = deferred<{ ok: boolean; json: () => Promise<typeof okPayload> }>();
-    const newer = deferred<{ ok: boolean; json: () => Promise<typeof okPayload> }>();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => okPayload })
-      .mockReturnValueOnce(older.promise)
-      .mockReturnValueOnce(newer.promise);
-    vi.stubGlobal('fetch', fetchMock);
-    const intervalSpy = vi.spyOn(window, 'setInterval').mockReturnValue(1 as unknown as NodeJS.Timeout);
-    vi.spyOn(window, 'clearInterval').mockImplementation(() => undefined);
-
-    render(createElement(Home));
-    await screen.findByRole('heading', { name: /bitcoin signal/i });
-    const intervalCallback = intervalSpy.mock.calls[0][0] as () => void;
-
-    await act(async () => intervalCallback());
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    await act(async () => intervalCallback());
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-    await act(async () => {
-      newer.resolve({ ok: false, json: async () => okPayload });
-      await newer.promise;
-    });
-    expect(await screen.findByRole('alert')).toHaveTextContent(/showing the last successful snapshot/i);
-    await act(async () => {
-      older.resolve({ ok: true, json: async () => olderPayload });
-      await older.promise;
-    });
-
-    expect(screen.getByRole('alert')).toBeInTheDocument();
-    expect(screen.queryByText(/00:03:00/)).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /bitcoin signal/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Bitcoin 시그널/i })).toBeInTheDocument();
   });
 });

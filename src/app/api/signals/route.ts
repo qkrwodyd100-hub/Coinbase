@@ -14,7 +14,7 @@ export async function GET() {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown market data error.';
     return NextResponse.json(
-      { error: 'Unable to refresh crypto signals.', detail: message },
+      { error: '크립토 시그널을 새로고침하지 못했습니다.', detail: message },
       { status: 502, headers: { 'Cache-Control': 'no-store' } },
     );
   }

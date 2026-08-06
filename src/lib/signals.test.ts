@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   calculateMovingAverage,
   calculateRsi,
+  formatKrw,
+  formatUsdWithKrw,
   scoreFearGreed,
   scoreFunding,
   scoreMovingAverages,
@@ -60,16 +62,30 @@ describe('signal scoring thresholds', () => {
   });
 
   it.each([
-    [80, 'Strong Buy'],
-    [79, 'Buy'],
-    [60, 'Buy'],
-    [59, 'Neutral'],
-    [41, 'Neutral'],
-    [40, 'Sell'],
-    [21, 'Sell'],
-    [20, 'Strong Sell'],
+    [80, '강력 매수'],
+    [79, '매수'],
+    [60, '매수'],
+    [59, '관망'],
+    [41, '관망'],
+    [40, '매도'],
+    [21, '매도'],
+    [20, '강력 매도'],
   ])('labels overall score %s as %s', (score, label) => {
     expect(signalForScore(score).label).toBe(label);
+  });
+});
+
+describe('currency formatting', () => {
+  it('formats KRW without misleading decimals', () => {
+    expect(formatKrw(89_000_000)).toBe('₩89,000,000');
+  });
+
+  it('places computed KRW immediately beside the USD price', () => {
+    expect(formatUsdWithKrw(64_622, 1377.2399492432917)).toBe('$64,622 · ₩89,000,000');
+  });
+
+  it('falls back to USD only when the exchange rate is unavailable', () => {
+    expect(formatUsdWithKrw(64_622, null)).toBe('$64,622');
   });
 });
 
