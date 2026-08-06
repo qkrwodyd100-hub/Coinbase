@@ -11,6 +11,8 @@ type Overrides = {
   ethBtcClose?: string;
   usdKrwRate?: number | string | null;
   failFx?: boolean;
+  failFutures?: boolean;
+  malformedFuturesJson?: boolean;
   malformedFx?: boolean;
   usdKrwBase?: string;
   usdKrwAmount?: number;
@@ -56,8 +58,11 @@ function installMarketFetch(overrides: Overrides = {}) {
           payload = klineRows(url.includes('BTCUSDT') ? (overrides.btcClose ?? '60000') : '3000');
         }
       } else if (url.includes('/fapi/v1/fundingRate')) {
+        if (overrides.failFutures) return { ok: false, status: 451, json: async () => ({}) };
+        if (overrides.malformedFuturesJson) return { ok: true, status: 200, json: async () => Promise.reject(new SyntaxError('invalid JSON')) };
         payload = [{ fundingRate: url.includes('BTCUSDT') ? (overrides.btcFunding ?? '0.0001') : '0.0001', fundingTime: 1_700_000_000_000 }];
       } else if (url.includes('/futures/data/openInterestHist')) {
+        if (overrides.failFutures) return { ok: false, status: 451, json: async () => ({}) };
         payload = [
           { sumOpenInterest: overrides.btcPreviousOpenInterest ?? '1000', timestamp: 1_700_000_000_000 },
           { sumOpenInterest: url.includes('BTCUSDT') ? (overrides.btcOpenInterest ?? '1020') : '1020', timestamp: 1_700_014_400_000 },
@@ -110,6 +115,22 @@ describe('market payload validation', () => {
     expect(payload.usdKrwRate).toBeNull();
     expect(payload.fxUnavailable).toBe(true);
     expect(payload.assets.map((asset) => asset.price)).toEqual([65000, 3200]);
+  });
+
+  it('keeps spot signals available when Binance futures endpoints are region-blocked', async () => {
+    installMarketFetch({ failFutures: true });
+
+    const payload = await getDashboardPayload();
+
+    expect(payload.assets.map((asset) => asset.symbol)).toEqual(['BTC', 'ETH']);
+    expect(payload.assets.every((asset) => asset.missingFeatures.includes('funding') && asset.missingFeatures.includes('open-interest'))).toBe(true);
+    expect(payload.assets.every((asset) => asset.indicators.every((indicator) => indicator.id !== 'futures-positioning'))).toBe(true);
+  });
+
+  it('rejects malformed JSON from a successful futures response', async () => {
+    installMarketFetch({ malformedFuturesJson: true });
+
+    await expect(getDashboardPayload()).rejects.toThrow(/invalid json/i);
   });
 
   it.each([

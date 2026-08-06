@@ -66,7 +66,7 @@ async function getAssetSignal(
     candles,
     fearGreed,
     fundingPercent,
-    oiChangePercent: openInterest.changePercent,
+    oiChangePercent: openInterest?.changePercent,
     priceChangePercent,
     ethBtcCurrent: asset.symbol === 'ETH' ? ethBtcCurrent : undefined,
     ethBtcMa20: asset.symbol === 'ETH' ? ethBtcMa20 : undefined,
@@ -110,8 +110,14 @@ async function getSpotCandles(symbol: string, interval: '1d' | '4h', limit: numb
   return candles;
 }
 
-async function getFundingPercent(symbol: string): Promise<number> {
-  const payload = await fetchJson(`${BINANCE_FUTURES_BASE}/fapi/v1/fundingRate?symbol=${symbol}&limit=1`);
+async function getFundingPercent(symbol: string): Promise<number | undefined> {
+  let payload: unknown;
+  try {
+    payload = await fetchJson(`${BINANCE_FUTURES_BASE}/fapi/v1/fundingRate?symbol=${symbol}&limit=1`);
+  } catch (error) {
+    if (error instanceof UpstreamRequestError) return undefined;
+    throw error;
+  }
   if (!Array.isArray(payload) || !isRecord(payload[0])) {
     throw new Error(`Unexpected funding payload for ${symbol}`);
   }
@@ -120,8 +126,14 @@ async function getFundingPercent(symbol: string): Promise<number> {
   return fundingRate * 100;
 }
 
-async function getOpenInterestChange(symbol: string): Promise<{ current: number; previous: number; changePercent: number }> {
-  const payload = await fetchJson(`${BINANCE_FUTURES_BASE}/futures/data/openInterestHist?symbol=${symbol}&period=4h&limit=2`);
+async function getOpenInterestChange(symbol: string): Promise<{ current: number; previous: number; changePercent: number } | undefined> {
+  let payload: unknown;
+  try {
+    payload = await fetchJson(`${BINANCE_FUTURES_BASE}/futures/data/openInterestHist?symbol=${symbol}&period=4h&limit=2`);
+  } catch (error) {
+    if (error instanceof UpstreamRequestError) return undefined;
+    throw error;
+  }
   if (!Array.isArray(payload) || payload.length < 2 || !isRecord(payload[0]) || !isRecord(payload[1])) {
     throw new Error(`Unexpected open interest payload for ${symbol}`);
   }
@@ -149,14 +161,20 @@ async function fetchJson(url: string): Promise<unknown> {
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const response = await fetch(url, {
-      headers: { accept: 'application/json' },
-      next: { revalidate: REVALIDATE_SECONDS },
-      signal: controller.signal,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: { accept: 'application/json' },
+        next: { revalidate: REVALIDATE_SECONDS },
+        signal: controller.signal,
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'unknown network error';
+      throw new UpstreamRequestError(`Request failed for ${url}: ${detail}`);
+    }
 
     if (!response.ok) {
-      throw new Error(`Request failed ${response.status} for ${url}`);
+      throw new UpstreamRequestError(`Request failed ${response.status} for ${url}`);
     }
 
     return response.json();
@@ -164,6 +182,8 @@ async function fetchJson(url: string): Promise<unknown> {
     clearTimeout(timeout);
   }
 }
+
+class UpstreamRequestError extends Error {}
 
 function parseKline(entry: unknown, label: string): MarketCandle {
   if (!Array.isArray(entry) || entry.length < 6) {
