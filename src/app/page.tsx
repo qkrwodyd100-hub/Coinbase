@@ -23,28 +23,44 @@ export default function Home() {
   const [selectedSymbol, setSelectedSymbol] = useState<'BTC' | 'ETH'>('BTC');
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [error, setError] = useState<string | null>(null);
-  const [alertsEnabled, setAlertsEnabled] = useState(() => readStoredBoolean(ALERT_ENABLED_STORAGE_KEY, true));
-  const [alertState, setAlertState] = useState<ExtremeSignalAlertState>(() => readStoredAlertState());
-  const [alertHistory, setAlertHistory] = useState<ExtremeSignalAlert[]>(() => readStoredAlertHistory());
+  const [alertsEnabled, setAlertsEnabled] = useState(true);
+  const [alertState, setAlertState] = useState<ExtremeSignalAlertState>({});
+  const [alertHistory, setAlertHistory] = useState<ExtremeSignalAlert[]>([]);
   const [latestAlert, setLatestAlert] = useState<ExtremeSignalAlert | null>(null);
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(() => getNotificationPermission());
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>('unsupported');
+  const [storageHydrated, setStorageHydrated] = useState(false);
   const requestGeneration = useRef(0);
   const alertStateRef = useRef(alertState);
   const alertsEnabledRef = useRef(alertsEnabled);
 
   useEffect(() => {
+    const storedAlertsEnabled = readStoredBoolean(ALERT_ENABLED_STORAGE_KEY, true);
+    const storedAlertState = readStoredAlertState();
+    alertsEnabledRef.current = storedAlertsEnabled;
+    alertStateRef.current = storedAlertState;
+    setAlertsEnabled(storedAlertsEnabled);
+    setAlertState(storedAlertState);
+    setAlertHistory(readStoredAlertHistory());
+    setNotificationPermission(getNotificationPermission());
+    setStorageHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!storageHydrated) return;
     alertStateRef.current = alertState;
     safeLocalStorageSet(ALERT_STATE_STORAGE_KEY, serializeAlertState(alertState));
-  }, [alertState]);
+  }, [alertState, storageHydrated]);
 
   useEffect(() => {
+    if (!storageHydrated) return;
     alertsEnabledRef.current = alertsEnabled;
     safeLocalStorageSet(ALERT_ENABLED_STORAGE_KEY, alertsEnabled ? 'true' : 'false');
-  }, [alertsEnabled]);
+  }, [alertsEnabled, storageHydrated]);
 
   useEffect(() => {
+    if (!storageHydrated) return;
     safeLocalStorageSet(ALERT_HISTORY_STORAGE_KEY, JSON.stringify(alertHistory));
-  }, [alertHistory]);
+  }, [alertHistory, storageHydrated]);
 
   const refreshSignals = useCallback(async () => {
     const generation = requestGeneration.current + 1;
@@ -460,7 +476,11 @@ function getNotificationPermission(): NotificationPermission | 'unsupported' {
 
 function readStoredAlertState(): ExtremeSignalAlertState {
   if (typeof window === 'undefined') return {};
-  return parseStoredAlertState(window.localStorage.getItem(ALERT_STATE_STORAGE_KEY));
+  try {
+    return parseStoredAlertState(window.localStorage.getItem(ALERT_STATE_STORAGE_KEY));
+  } catch {
+    return {};
+  }
 }
 
 function readStoredAlertHistory(): ExtremeSignalAlert[] {
@@ -476,10 +496,14 @@ function readStoredAlertHistory(): ExtremeSignalAlert[] {
 
 function readStoredBoolean(key: string, fallback: boolean): boolean {
   if (typeof window === 'undefined') return fallback;
-  const value = window.localStorage.getItem(key);
-  if (value === 'true') return true;
-  if (value === 'false') return false;
-  return fallback;
+  try {
+    const value = window.localStorage.getItem(key);
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function safeLocalStorageSet(key: string, value: string) {
@@ -493,7 +517,11 @@ function safeLocalStorageSet(key: string, value: string) {
 function showBrowserNotifications(alerts: ExtremeSignalAlert[]) {
   if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted' || typeof Notification !== 'function') return;
   for (const alert of alerts) {
-    new Notification(alert.title, { body: `${alert.details}\n${alert.recommendedAction}` });
+    try {
+      new Notification(alert.title, { body: `${alert.details}\n${alert.recommendedAction}` });
+    } catch {
+      // Browser notifications are best-effort; in-app alerts and signal refresh must continue.
+    }
   }
 }
 

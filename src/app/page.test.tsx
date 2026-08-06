@@ -331,6 +331,42 @@ describe('dashboard behavior', () => {
     expect(screen.getByRole('list', { name: '최근 극단 시그널 알람 이력' })).toHaveTextContent('ETH 종합 점수 20점 하락');
   });
 
+  it('keeps a successful signal refresh when a granted browser notification constructor throws', async () => {
+    class ThrowingNotification {
+      static permission = 'granted' as NotificationPermission;
+
+      constructor() {
+        throw new Error('notification delivery failed');
+      }
+    }
+    vi.stubGlobal('Notification', ThrowingNotification);
+    const initialPayload = { ...okPayload, assets: okPayload.assets.map((asset) => (asset.symbol === 'BTC' ? { ...asset, overallScore: 79, signal: { label: '매수', tone: 'positive' } } : asset)) };
+    const crossedPayload = { ...okPayload, asOf: '2026-08-05T00:01:00.000Z', assets: okPayload.assets.map((asset) => (asset.symbol === 'BTC' ? { ...asset, overallScore: 82, signal: { label: '강력 매수', tone: 'positive' } } : asset)) };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true, json: async () => initialPayload }).mockResolvedValueOnce({ ok: true, json: async () => crossedPayload }));
+
+    render(createElement(Home));
+    await screen.findByRole('heading', { name: /비트코인 시그널/i });
+    await userEvent.click(screen.getByRole('button', { name: /시그널 새로고침/i }));
+
+    expect(await screen.findByRole('status', { name: /실시간 극단 시그널 알림/i })).toHaveTextContent('BTC 종합 점수 82점 달성');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '시그널 새로고침' })).toBeEnabled();
+  });
+
+  it('continues with safe defaults when localStorage reads are unavailable', async () => {
+    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('storage unavailable');
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => okPayload }));
+
+    render(createElement(Home));
+
+    expect(await screen.findByRole('heading', { name: /비트코인 시그널/i })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: '극단 시그널 알람 활성화' })).toBeChecked();
+    expect(screen.getByText('아직 발생한 극단 시그널 알람이 없습니다.')).toBeInTheDocument();
+    getItem.mockRestore();
+  });
+
   it('recovers from corrupted alert localStorage and replaces it with parseable state on the first refresh', async () => {
     window.localStorage.setItem('crypto-signal-dashboard:extreme-alert-state', '{bad json');
     window.localStorage.setItem('crypto-signal-dashboard:extreme-alert-history', '{bad json');
