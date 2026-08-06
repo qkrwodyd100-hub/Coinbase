@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act, createElement } from 'react';
 import Home from '@/app/page';
@@ -80,14 +80,42 @@ describe('dashboard behavior', () => {
     expect(screen.getByRole('heading', { name: 'BTC / ETH 시그널 대시보드' })).toBeInTheDocument();
     expect(screen.getAllByText('$65,000 · ₩89,050,000').length).toBeGreaterThan(0);
     expect(screen.getAllByText('강력 매수').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Kraken 선물 펀딩/)).toBeInTheDocument();
-    expect(screen.getByRole('meter', { name: /비트코인 시그널 점수/i })).toHaveAttribute('aria-valuenow', '85');
+    expect(screen.getByText(/Kraken 선물 펀딩비율/)).toBeInTheDocument();
+    const bitcoinMeter = screen.getByRole('meter', { name: /비트코인 시그널 점수/i });
+    expect(bitcoinMeter).toHaveAttribute('aria-valuenow', '85');
+    expect(bitcoinMeter.querySelector('circle.stroke-emerald-300')).toBeInTheDocument();
+    expect(within(bitcoinMeter).getByText('강력 매수')).toHaveClass('text-emerald-100');
+
+    const movingAveragePrices = screen.getByRole('list', { name: '이동평균 가격' });
+    expect(within(movingAveragePrices).getAllByRole('listitem')).toHaveLength(3);
+    expect(within(movingAveragePrices).getByText('현재가 $65,000 · ₩89,050,000')).toBeInTheDocument();
+    expect(within(movingAveragePrices).getByText('MA20 $63,000 · ₩86,310,000')).toBeInTheDocument();
+    expect(within(movingAveragePrices).getByText('MA50 $61,000 · ₩83,570,000')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('tab', { name: /eth.*이더리움/i }));
 
     expect(screen.getByRole('heading', { name: /이더리움 시그널/i })).toBeInTheDocument();
     expect(screen.getAllByText('$3,200 · ₩4,384,000').length).toBeGreaterThan(0);
     expect(screen.getAllByText('관망').length).toBeGreaterThan(0);
+    const ethereumMeter = screen.getByRole('meter', { name: /이더리움 시그널 점수/i });
+    expect(ethereumMeter.querySelector('circle.stroke-amber-300')).toBeInTheDocument();
+    expect(within(ethereumMeter).getByText('관망')).toHaveClass('text-amber-100');
+  });
+
+  it('uses red for sell signal tags and the score gauge', async () => {
+    const sellPayload = {
+      ...okPayload,
+      assets: okPayload.assets.map((asset) =>
+        asset.symbol === 'BTC' ? { ...asset, overallScore: 10, signal: { label: '강력 매도', tone: 'negative' } } : asset,
+      ),
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => sellPayload }));
+
+    render(createElement(Home));
+
+    const meter = await screen.findByRole('meter', { name: /비트코인 시그널 점수/i });
+    expect(meter.querySelector('circle.stroke-rose-300')).toBeInTheDocument();
+    expect(within(meter).getByText('강력 매도')).toHaveClass('text-rose-100');
   });
 
   it('shows an unobtrusive Korean state when KRW conversion is unavailable', async () => {

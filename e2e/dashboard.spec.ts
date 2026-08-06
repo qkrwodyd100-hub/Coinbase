@@ -104,6 +104,15 @@ test('dashboard renders Korean live data, KRW prices, and supports asset switchi
   await expect(page.getByRole('heading', { name: /비트코인 시그널/i })).toBeVisible();
   await expect(page.getByRole('tab', { name: /btc.*비트코인/i }).getByText('$65,000 · ₩89,050,000')).toBeVisible();
   await expect(page.getByText('강력 매수').last()).toBeVisible();
+  await expect(page.getByText(/Kraken 선물 펀딩비율/)).toBeVisible();
+  const btcMeter = page.getByRole('meter', { name: /비트코인 시그널 점수/i });
+  await expect(btcMeter.locator('circle.stroke-emerald-300')).toBeVisible();
+  await expect(btcMeter.getByText('강력 매수')).toHaveClass(/text-emerald-100/);
+  const btcMovingAverageRows = page.getByRole('list', { name: '이동평균 가격' }).getByRole('listitem');
+  await expect(btcMovingAverageRows).toHaveCount(3);
+  await expect(btcMovingAverageRows.nth(0)).toHaveText('현재가 $65,000 · ₩89,050,000');
+  await expect(btcMovingAverageRows.nth(1)).toHaveText('MA20 $63,000 · ₩86,310,000');
+  await expect(btcMovingAverageRows.nth(2)).toHaveText('MA50 $61,000 · ₩83,570,000');
   await expectNoHorizontalOverflow(page);
 
   await page.getByRole('tab', { name: /eth.*이더리움/i }).click();
@@ -111,6 +120,14 @@ test('dashboard renders Korean live data, KRW prices, and supports asset switchi
   await expect(page.getByRole('heading', { name: /이더리움 시그널/i })).toBeVisible();
   await expect(page.getByRole('tab', { name: /eth.*이더리움/i }).getByText('$3,200 · ₩4,384,000')).toBeVisible();
   await expect(page.getByText('관망').last()).toBeVisible();
+  const ethMeter = page.getByRole('meter', { name: /이더리움 시그널 점수/i });
+  await expect(ethMeter.locator('circle.stroke-amber-300')).toBeVisible();
+  await expect(ethMeter.getByText('관망')).toHaveClass(/text-amber-100/);
+  const ethMovingAverageRows = page.getByRole('list', { name: '이동평균 가격' }).getByRole('listitem');
+  await expect(ethMovingAverageRows).toHaveCount(3);
+  await expect(ethMovingAverageRows.nth(0)).toHaveText('현재가 $3,200 · ₩4,384,000');
+  await expect(ethMovingAverageRows.nth(1)).toHaveText('MA20 $3,100 · ₩4,247,000');
+  await expect(ethMovingAverageRows.nth(2)).toHaveText('MA50 $3,250 · ₩4,452,500');
   await expectNoHorizontalOverflow(page);
   await assertNoClientErrors();
 });

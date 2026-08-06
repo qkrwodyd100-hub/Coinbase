@@ -65,7 +65,7 @@ export default function Home() {
             <p className="text-sm font-medium uppercase tracking-[0.28em] text-cyan-200/80 sm:tracking-[0.32em]">실시간 시장 시그널</p>
             <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-5xl">BTC / ETH 시그널 대시보드</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
-              점수는 RSI(14), Alternative.me 공포·탐욕 지수, MA20/MA50 추세 정렬, Kraken 선물 펀딩을 종합합니다.
+              점수는 RSI(14), Alternative.me 공포·탐욕 지수, MA20/MA50 추세 정렬, Kraken 선물 펀딩비율을 종합합니다.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -180,7 +180,17 @@ function DashboardContent({
               <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="font-bold text-slate-100">{indicator.title}</h3>
-                  <p className="mt-1 break-words text-xl font-black leading-tight sm:text-2xl">{indicator.value}</p>
+                  {indicator.id === 'moving-averages' ? (
+                    <ul aria-label="이동평균 가격" className="mt-2 min-w-0 space-y-2 text-lg font-black leading-tight sm:text-xl">
+                      {indicator.value.split(' / ').map((priceRow, index) => (
+                        <li key={priceRow} className="min-w-0 break-words">
+                          {index === 0 ? `현재가 ${priceRow}` : priceRow}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 break-words text-xl font-black leading-tight sm:text-2xl">{indicator.value}</p>
+                  )}
                 </div>
                 <span className="rounded-2xl bg-white/10 px-3 py-2 text-sm font-bold">
                   {indicator.score}/{indicator.maxScore}
