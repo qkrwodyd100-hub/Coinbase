@@ -146,6 +146,25 @@ describe('dashboard behavior', () => {
     expect(screen.queryByText('-0.0010% / OI 2.00%')).not.toBeInTheDocument();
   });
 
+  it('explains unavailable funding and open-interest data without presenting it as a zero score', async () => {
+    const unavailableFuturesPayload = {
+      ...okPayload,
+      assets: okPayload.assets.map((asset) => ({
+        ...asset,
+        indicators: asset.indicators.filter((indicator) => indicator.id !== 'futures-positioning'),
+        missingFeatures: ['funding', 'open-interest'],
+        scorePolicy: 'missing features are not converted to zero or full credit; available indicator weights are normalized to 100 and limitations are exposed.',
+      })),
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => unavailableFuturesPayload }));
+
+    render(createElement(Home));
+
+    expect(await screen.findByText('선물 펀딩비와 미체결약정 데이터를 가져오지 못했습니다.')).toBeInTheDocument();
+    expect(screen.getByText('누락 지표는 0점이나 만점으로 처리하지 않고, 사용 가능한 지표만 100점 기준으로 정규화했습니다.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /선물 펀딩비·미체결약정.*상세 설명 열기/i })).not.toBeInTheDocument();
+  });
+
   it('uses red for sell signal tags and the score gauge', async () => {
     const sellPayload = {
       ...okPayload,

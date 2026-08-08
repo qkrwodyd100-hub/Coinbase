@@ -287,6 +287,7 @@ function DashboardContent({
   const indicatorButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const selectedIndicator = selectedIndicatorId ? (selectedAsset.indicators.find((indicator) => indicator.id === selectedIndicatorId) ?? null) : null;
   const selectedContribution = selectedIndicator ? calculateIndicatorContribution(selectedIndicator, selectedAsset) : 0;
+  const missingFeatures = selectedAsset.missingFeatures ?? [];
 
   useEffect(() => {
     setSelectedIndicatorId(null);
@@ -411,6 +412,7 @@ function DashboardContent({
             </button>
           ))}
         </div>
+        {missingFeatures.includes('funding') || missingFeatures.includes('open-interest') ? <UnavailableFuturesDataNotice missingFeatures={missingFeatures} /> : null}
       </section>
       {selectedIndicator ? (
         <IndicatorDetailDialog asset={selectedAsset} indicator={selectedIndicator} contribution={selectedContribution} onClose={closeIndicatorDetail} />
@@ -545,6 +547,17 @@ function DetailSection({ title, body }: { title: string; body: string }) {
     <section className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
       <h3 className="font-black text-slate-100">{title}</h3>
       <p className="mt-2 text-slate-300">{body}</p>
+    </section>
+  );
+}
+
+function UnavailableFuturesDataNotice({ missingFeatures }: { missingFeatures: AssetSignal['missingFeatures'] }) {
+  const fundingUnavailable = missingFeatures.includes('funding');
+
+  return (
+    <section className="mt-4 rounded-2xl border border-amber-200/30 bg-amber-200/10 p-4 text-sm leading-6 text-amber-50" aria-label="선물 데이터 결측 안내">
+      <h3 className="font-black">{fundingUnavailable ? '선물 펀딩비와 미체결약정 데이터를 가져오지 못했습니다.' : '미체결약정 데이터를 가져오지 못했습니다.'}</h3>
+      <p className="mt-1 text-amber-100">누락 지표는 0점이나 만점으로 처리하지 않고, 사용 가능한 지표만 100점 기준으로 정규화했습니다.</p>
     </section>
   );
 }
