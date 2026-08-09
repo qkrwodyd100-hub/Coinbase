@@ -1,4 +1,4 @@
-import { buildAssetSignal, type AssetSignal, type BacktestSummaryRow, type DashboardPayload, type MarketCandle } from './signals';
+import { buildAssetSignal, type AssetSignal, type AssetSymbol, type BacktestSummaryRow, type DashboardPayload, type MarketCandle } from './signals';
 import backtestSummary from '@/data/backtest-summary.json';
 
 const STATIC_BACKTEST_SUMMARY = backtestSummary as {
@@ -9,15 +9,22 @@ const STATIC_BACKTEST_SUMMARY = backtestSummary as {
 };
 
 type AssetConfig = {
-  symbol: 'BTC' | 'ETH';
+  symbol: AssetSymbol;
   name: string;
-  spotSymbol: 'BTCUSDT' | 'ETHUSDT';
-  futuresSymbol: 'BTCUSDT' | 'ETHUSDT';
+  spotSymbol: string;
+  futuresSymbol: string;
+  btcSymbol?: string;
 };
 
 const ASSETS: AssetConfig[] = [
   { symbol: 'BTC', name: '비트코인', spotSymbol: 'BTCUSDT', futuresSymbol: 'BTCUSDT' },
   { symbol: 'ETH', name: '이더리움', spotSymbol: 'ETHUSDT', futuresSymbol: 'ETHUSDT' },
+  { symbol: 'SHIB', name: '시바이누', spotSymbol: 'SHIBUSDT', futuresSymbol: 'SHIBUSDT' },
+  { symbol: 'FIL', name: '파일코인', spotSymbol: 'FILUSDT', futuresSymbol: 'FILUSDT', btcSymbol: 'FILBTC' },
+  { symbol: 'STX', name: '스택스', spotSymbol: 'STXUSDT', futuresSymbol: 'STXUSDT', btcSymbol: 'STXBTC' },
+  { symbol: 'DOGE', name: '도지코인', spotSymbol: 'DOGEUSDT', futuresSymbol: 'DOGEUSDT', btcSymbol: 'DOGEBTC' },
+  { symbol: 'ARB', name: '아비트럼', spotSymbol: 'ARBUSDT', futuresSymbol: 'ARBUSDT', btcSymbol: 'ARBBTC' },
+  { symbol: 'XRP', name: '엑스알피', spotSymbol: 'XRPUSDT', futuresSymbol: 'XRPUSDT', btcSymbol: 'XRPBTC' },
 ];
 
 const BINANCE_SPOT_BASE = 'https://data-api.binance.vision/api/v3';
@@ -50,11 +57,12 @@ async function getAssetSignal(
   ethBtcCurrent: number | undefined,
   ethBtcMa20: number | undefined,
 ): Promise<AssetSignal> {
-  const [price, candles, fundingPercent, openInterest] = await Promise.all([
+  const [price, candles, fundingPercent, openInterest, altBtcCandles] = await Promise.all([
     getTickerPrice(asset.spotSymbol),
     getSpotCandles(asset.spotSymbol, '1d', 80),
     getFundingPercent(asset.futuresSymbol),
     getOpenInterestChange(asset.futuresSymbol),
+    getAltBtcCandles(asset).catch(() => []),
   ]);
   const previousClose = candles.at(-2)?.close ?? candles.at(-1)?.open ?? price;
   const priceChangePercent = ((price - previousClose) / previousClose) * 100;
@@ -70,8 +78,23 @@ async function getAssetSignal(
     priceChangePercent,
     ethBtcCurrent: asset.symbol === 'ETH' ? ethBtcCurrent : undefined,
     ethBtcMa20: asset.symbol === 'ETH' ? ethBtcMa20 : undefined,
+    altBtcCurrent: altBtcCandles.at(-1)?.close,
+    altBtcMa20: altBtcCandles.length >= 20 ? altBtcCandles.slice(-20).reduce((sum, candle) => sum + candle.close, 0) / 20 : undefined,
     usdKrwRate,
   });
+}
+
+async function getAltBtcCandles(asset: AssetConfig): Promise<MarketCandle[]> {
+  if (asset.symbol === 'SHIB') {
+    const [shibUsd, btcUsd] = await Promise.all([getSpotCandles('SHIBUSDT', '1d', 80), getSpotCandles('BTCUSDT', '1d', 80)]);
+    return shibUsd.flatMap((candle, index) => {
+      const btc = btcUsd[index];
+      return btc && btc.open > 0 && btc.high > 0 && btc.low > 0 && btc.close > 0
+        ? [{ ...candle, open: candle.open / btc.open, high: candle.high / btc.high, low: candle.low / btc.low, close: candle.close / btc.close }]
+        : [];
+    });
+  }
+  return asset.btcSymbol ? getSpotCandles(asset.btcSymbol, '1d', 80) : [];
 }
 
 async function getUsdKrwRate(): Promise<number | null> {

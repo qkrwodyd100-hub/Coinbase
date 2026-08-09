@@ -9,6 +9,10 @@ import {
   scoreFearGreed,
   scoreFunding,
   scoreFuturesPositioning,
+  scoreAltMfiWithVolume,
+  scoreAltMovingAverages,
+  scoreAltRsi,
+  scoreAltBtcStrength,
   scoreMfi,
   scoreMovingAverages,
   scoreRsi,
@@ -16,6 +20,42 @@ import {
 } from '@/lib/signals';
 
 describe('signal scoring thresholds', () => {
+  it.each([
+    [{ price: 104, ma20: 100, ma50: 90 }, 20],
+    [{ price: 106, ma20: 100, ma50: 90 }, 15],
+    [{ price: 116, ma20: 100, ma50: 90 }, 8],
+    [{ price: 99, ma20: 100, ma50: 90 }, 5],
+    [{ price: 89, ma20: 100, ma50: 90 }, 0],
+  ])('scores alt moving averages %# with the documented 20-point bands', (input, expected) => {
+    expect(scoreAltMovingAverages(input.price, input.ma20, input.ma50).score).toBe(expected);
+  });
+
+  it.each([
+    [25, 20],
+    [25.01, 15],
+    [50, 15],
+    [50.01, 8],
+    [74.99, 8],
+    [75, 0],
+  ])('scores alt RSI %s at the 25/75 boundaries', (value, expected) => {
+    expect(scoreAltRsi(value).score).toBe(expected);
+  });
+
+  it.each([
+    [{ mfi: 20, volume: 199, previousVolume: 100 }, 20],
+    [{ mfi: 20, volume: 200, previousVolume: 100 }, 25],
+    [{ mfi: 80, volume: 200, previousVolume: 100 }, 5],
+  ])('adds the alt volume bonus only at 200% or more of the prior comparable candle', (input, expected) => {
+    expect(scoreAltMfiWithVolume(input).score).toBe(expected);
+  });
+
+  it.each([
+    [{ current: 0.0102, ma20: 0.01 }, 15],
+    [{ current: 0.01, ma20: 0.01 }, 8],
+    [{ current: 0.0098, ma20: 0.01 }, 0],
+  ])('scores ALT/BTC strength in deterministic ±2% bands', (input, expected) => {
+    expect(scoreAltBtcStrength(input.current, input.ma20).score).toBe(expected);
+  });
   it.each([
     [30, 20],
     [30.01, 15],

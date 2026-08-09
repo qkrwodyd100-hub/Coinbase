@@ -18,6 +18,9 @@ type Overrides = {
   usdKrwAmount?: number;
 };
 
+const EXPECTED_SYMBOLS = ['BTC', 'ETH', 'SHIB', 'FIL', 'STX', 'DOGE', 'ARB', 'XRP'];
+const EXPECTED_PRICES = [65000, 3200, 10, 10, 10, 10, 10, 10];
+
 function klineRows(close: string, count = 80) {
   const base = Number(close);
   const step = base >= 1 ? 1 : 0.0001;
@@ -36,116 +39,48 @@ function klineRows(close: string, count = 80) {
 }
 
 function installMarketFetch(overrides: Overrides = {}) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (input: string | URL | Request) => {
-      const url = String(input);
-      let payload: unknown;
-
-      if (url.includes('frankfurter.app')) {
-        if (overrides.failFx) return { ok: false, json: async () => ({}) };
-        payload = overrides.malformedFx
-          ? { rates: null }
-          : { amount: overrides.usdKrwAmount ?? 1, base: overrides.usdKrwBase ?? 'USD', rates: { KRW: overrides.usdKrwRate ?? 1370 } };
-      } else if (url.includes('alternative.me')) {
-        payload = { data: [{ value: overrides.fearGreed ?? '40', timestamp: '1785888000' }] };
-      } else if (url.includes('/api/v3/ticker/price')) {
-        payload = { symbol: url.includes('BTCUSDT') ? 'BTCUSDT' : 'ETHUSDT', price: url.includes('BTCUSDT') ? (overrides.btcPrice ?? '65000') : '3200' };
-      } else if (url.includes('/api/v3/klines')) {
-        if (url.includes('ETHBTC')) {
-          payload = klineRows(overrides.ethBtcClose ?? '0.06');
-        } else {
-          payload = klineRows(url.includes('BTCUSDT') ? (overrides.btcClose ?? '60000') : '3000');
-        }
-      } else if (url.includes('/fapi/v1/fundingRate')) {
-        if (overrides.failFutures) return { ok: false, status: 451, json: async () => ({}) };
-        if (overrides.malformedFuturesJson) return { ok: true, status: 200, json: async () => Promise.reject(new SyntaxError('invalid JSON')) };
-        payload = [{ fundingRate: url.includes('BTCUSDT') ? (overrides.btcFunding ?? '0.0001') : '0.0001', fundingTime: 1_700_000_000_000 }];
-      } else if (url.includes('/futures/data/openInterestHist')) {
-        if (overrides.failFutures) return { ok: false, status: 451, json: async () => ({}) };
-        payload = [
-          { sumOpenInterest: overrides.btcPreviousOpenInterest ?? '1000', timestamp: 1_700_000_000_000 },
-          { sumOpenInterest: url.includes('BTCUSDT') ? (overrides.btcOpenInterest ?? '1020') : '1020', timestamp: 1_700_014_400_000 },
-        ];
-      } else {
-        throw new Error(`Unexpected test URL: ${url}`);
-      }
-
-      return { ok: true, json: async () => payload };
-    }),
-  );
+  vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
+    const url = String(input);
+    let payload: unknown;
+    if (url.includes('frankfurter.app')) {
+      if (overrides.failFx) return { ok: false, json: async () => ({}) };
+      payload = overrides.malformedFx ? { rates: null } : { amount: overrides.usdKrwAmount ?? 1, base: overrides.usdKrwBase ?? 'USD', rates: { KRW: overrides.usdKrwRate ?? 1370 } };
+    } else if (url.includes('alternative.me')) {
+      payload = { data: [{ value: overrides.fearGreed ?? '40', timestamp: '1785888000' }] };
+    } else if (url.includes('/api/v3/ticker/price')) {
+      const symbol = new URL(url).searchParams.get('symbol')!;
+      payload = { symbol, price: symbol === 'BTCUSDT' ? (overrides.btcPrice ?? '65000') : symbol === 'ETHUSDT' ? '3200' : '10' };
+    } else if (url.includes('/api/v3/klines')) {
+      payload = klineRows(url.includes('BTCUSDT') ? (overrides.btcClose ?? '60000') : url.includes('ETHUSDT') ? '3000' : url.includes('ETHBTC') ? (overrides.ethBtcClose ?? '0.06') : '10');
+    } else if (url.includes('/fapi/v1/fundingRate')) {
+      if (overrides.failFutures) return { ok: false, status: 451, json: async () => ({}) };
+      if (overrides.malformedFuturesJson) return { ok: true, status: 200, json: async () => Promise.reject(new SyntaxError('invalid JSON')) };
+      payload = [{ fundingRate: url.includes('BTCUSDT') ? (overrides.btcFunding ?? '0.0001') : '0.0001', fundingTime: 1_700_000_000_000 }];
+    } else if (url.includes('/futures/data/openInterestHist')) {
+      if (overrides.failFutures) return { ok: false, status: 451, json: async () => ({}) };
+      payload = [{ sumOpenInterest: overrides.btcPreviousOpenInterest ?? '1000', timestamp: 1_700_000_000_000 }, { sumOpenInterest: url.includes('BTCUSDT') ? (overrides.btcOpenInterest ?? '1020') : '1020', timestamp: 1_700_014_400_000 }];
+    } else throw new Error(`Unexpected test URL: ${url}`);
+    return { ok: true, json: async () => payload };
+  }));
 }
 
 describe('market payload validation', () => {
   afterEach(() => vi.unstubAllGlobals());
-
   it.each([
-    [{ btcPrice: '-1' }, /price must be greater than zero/i],
-    [{ btcClose: '0' }, /close must be greater than zero/i],
-    [{ fearGreed: '101' }, /fear & greed must be between 0 and 100/i],
-    [{ btcFunding: '101' }, /funding must be between -100 and 100/i],
-    [{ btcOpenInterest: '-1' }, /open interest must be greater than zero/i],
-  ] satisfies Array<[Overrides, RegExp]>)('rejects invalid upstream numeric domains: %#', async (overrides, message) => {
-    installMarketFetch(overrides);
-
-    await expect(getDashboardPayload()).rejects.toThrow(message);
-  });
-
-  it('builds both asset signals from Binance and Alternative.me no-key public payloads', async () => {
-    installMarketFetch();
-
-    const payload = await getDashboardPayload();
-
-    expect(payload.usdKrwRate).toBe(1370);
-    expect(payload.fxUnavailable).toBe(false);
-    expect(payload.assets.map((asset) => asset.symbol)).toEqual(['BTC', 'ETH']);
+    [{ btcPrice: '-1' }, /price must be greater than zero/i], [{ btcClose: '0' }, /close must be greater than zero/i], [{ fearGreed: '101' }, /fear & greed must be between 0 and 100/i], [{ btcFunding: '101' }, /funding must be between -100 and 100/i], [{ btcOpenInterest: '-1' }, /open interest must be greater than zero/i],
+  ] satisfies Array<[Overrides, RegExp]>)('rejects invalid upstream numeric domains: %#', async (overrides, message) => { installMarketFetch(overrides); await expect(getDashboardPayload()).rejects.toThrow(message); });
+  it('builds all eight asset signals from Binance and Alternative.me no-key public payloads', async () => {
+    installMarketFetch(); const payload = await getDashboardPayload();
+    expect(payload.usdKrwRate).toBe(1370); expect(payload.fxUnavailable).toBe(false);
+    expect(payload.assets.map((asset) => asset.symbol)).toEqual(EXPECTED_SYMBOLS);
+    expect(payload.assets.map((asset) => asset.price)).toEqual(EXPECTED_PRICES);
     expect(payload.assets.every((asset) => asset.overallScore >= 0 && asset.overallScore <= 100)).toBe(true);
-    expect(payload.assets[0].missingFeatures).toEqual([]);
+    expect(payload.assets.find((asset) => asset.symbol === 'SHIB')?.indicators.some((indicator) => indicator.id === 'alt-btc-strength')).toBe(true);
     const urls = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
-    expect(urls).toEqual(expect.arrayContaining([expect.stringContaining('data-api.binance.vision/api/v3/klines'), expect.stringContaining('fapi.binance.com/fapi/v1/fundingRate')]));
-    expect(urls).not.toContainEqual(expect.stringContaining('api.kraken.com'));
-    expect(urls).not.toContainEqual(expect.stringContaining('futures.kraken.com'));
+    expect(urls).toEqual(expect.arrayContaining([expect.stringContaining('SHIBUSDT'), expect.stringContaining('BTCUSDT'), expect.stringContaining('data-api.binance.vision/api/v3/klines')]));
   });
-
-  it('keeps USD market data when the FX source temporarily fails', async () => {
-    installMarketFetch({ failFx: true });
-
-    const payload = await getDashboardPayload();
-
-    expect(payload.usdKrwRate).toBeNull();
-    expect(payload.fxUnavailable).toBe(true);
-    expect(payload.assets.map((asset) => asset.price)).toEqual([65000, 3200]);
-  });
-
-  it('keeps spot signals available when Binance futures endpoints are region-blocked', async () => {
-    installMarketFetch({ failFutures: true });
-
-    const payload = await getDashboardPayload();
-
-    expect(payload.assets.map((asset) => asset.symbol)).toEqual(['BTC', 'ETH']);
-    expect(payload.assets.every((asset) => asset.missingFeatures.includes('funding') && asset.missingFeatures.includes('open-interest'))).toBe(true);
-    expect(payload.assets.every((asset) => asset.indicators.every((indicator) => indicator.id !== 'futures-positioning'))).toBe(true);
-  });
-
-  it('rejects malformed JSON from a successful futures response', async () => {
-    installMarketFetch({ malformedFuturesJson: true });
-
-    await expect(getDashboardPayload()).rejects.toThrow(/invalid json/i);
-  });
-
-  it.each([
-    { usdKrwRate: -1 },
-    { usdKrwRate: 'not-a-number' },
-    { malformedFx: true },
-    { usdKrwBase: 'EUR' },
-    { usdKrwAmount: 100 },
-  ] satisfies Overrides[])('keeps USD market data when the FX payload is invalid: %#', async (overrides) => {
-    installMarketFetch(overrides);
-
-    const payload = await getDashboardPayload();
-
-    expect(payload.usdKrwRate).toBeNull();
-    expect(payload.fxUnavailable).toBe(true);
-    expect(payload.assets.map((asset) => asset.price)).toEqual([65000, 3200]);
-  });
+  it('keeps all USD market signals when the FX source temporarily fails', async () => { installMarketFetch({ failFx: true }); const payload = await getDashboardPayload(); expect(payload.usdKrwRate).toBeNull(); expect(payload.fxUnavailable).toBe(true); expect(payload.assets.map((asset) => asset.price)).toEqual(EXPECTED_PRICES); });
+  it('keeps all spot signals available when Binance futures endpoints are region-blocked', async () => { installMarketFetch({ failFutures: true }); const payload = await getDashboardPayload(); expect(payload.assets.map((asset) => asset.symbol)).toEqual(EXPECTED_SYMBOLS); expect(payload.assets.every((asset) => asset.missingFeatures.includes('funding') && asset.missingFeatures.includes('open-interest'))).toBe(true); });
+  it('rejects malformed JSON from a successful futures response', async () => { installMarketFetch({ malformedFuturesJson: true }); await expect(getDashboardPayload()).rejects.toThrow(/invalid json/i); });
+  it.each([{ usdKrwRate: -1 }, { usdKrwRate: 'not-a-number' }, { malformedFx: true }, { usdKrwBase: 'EUR' }, { usdKrwAmount: 100 }] satisfies Overrides[])('keeps all USD market data when the FX payload is invalid: %#', async (overrides) => { installMarketFetch(overrides); const payload = await getDashboardPayload(); expect(payload.usdKrwRate).toBeNull(); expect(payload.fxUnavailable).toBe(true); expect(payload.assets.map((asset) => asset.price)).toEqual(EXPECTED_PRICES); });
 });

@@ -1,5 +1,7 @@
 export type SignalTone = 'positive' | 'neutral' | 'negative';
-export type IndicatorId = 'rsi' | 'fear-greed' | 'moving-averages' | 'funding' | 'mfi' | 'futures-positioning' | 'eth-btc-strength';
+export type AssetSymbol = 'BTC' | 'ETH' | 'SHIB' | 'FIL' | 'STX' | 'DOGE' | 'ARB' | 'XRP';
+export type AltAssetSymbol = Exclude<AssetSymbol, 'BTC' | 'ETH'>;
+export type IndicatorId = 'rsi' | 'fear-greed' | 'moving-averages' | 'funding' | 'mfi' | 'futures-positioning' | 'eth-btc-strength' | 'alt-btc-strength';
 
 export type MarketCandle = {
   openTime: number;
@@ -27,7 +29,7 @@ export type Signal = {
 };
 
 export type AssetSignal = {
-  symbol: 'BTC' | 'ETH';
+  symbol: AssetSymbol;
   name: string;
   price: number;
   overallScore: number;
@@ -39,7 +41,7 @@ export type AssetSignal = {
 };
 
 export type BacktestSummaryRow = {
-  asset: 'BTC' | 'ETH';
+  asset: AssetSymbol;
   interval: '4h' | '1d';
   signalType: 'strong-buy' | 'strong-sell';
   signalCount: number;
@@ -203,6 +205,18 @@ export function scoreFearGreed(value: number): IndicatorScore {
   };
 }
 
+export function scoreAltRsi(value: number): IndicatorScore {
+  const score = value <= 25 ? 20 : value <= 50 ? 15 : value < 75 ? 8 : 0;
+  const interpretation = value <= 25
+    ? 'RSI 25 이하는 알트코인 과매도 구간으로 최대 점수를 부여합니다.'
+    : value <= 50
+      ? 'RSI 25 초과~50 이하는 식은 모멘텀으로 높은 부분 점수를 부여합니다.'
+      : value < 75
+        ? 'RSI 50 초과~75 미만은 중립 이상 모멘텀으로 부분 점수를 부여합니다.'
+        : 'RSI 75 이상은 알트코인 과열 구간으로 점수를 부여하지 않습니다.';
+  return { id: 'rsi', title: 'RSI (14)', value: value.toFixed(2), score, maxScore: 20, interpretation };
+}
+
 export function scoreMovingAverages(price: number, ma20: number, ma50: number, usdKrwRate: number | null = null): IndicatorScore {
   const distancePercent = ((price - ma20) / ma20) * 100;
   let score: number;
@@ -238,6 +252,13 @@ export function scoreMovingAverages(price: number, ma20: number, ma50: number, u
   };
 }
 
+export function scoreAltMovingAverages(price: number, ma20: number, ma50: number, usdKrwRate: number | null = null): IndicatorScore {
+  const distancePercent = ((price - ma20) / ma20) * 100;
+  const score = ma20 > ma50 && price >= ma20 && distancePercent <= 5 ? 20 : ma20 > ma50 && price >= ma20 && distancePercent <= 10 ? 15 : ma20 > ma50 && price >= ma20 ? 8 : ma20 > ma50 && price >= ma50 ? 5 : 0;
+  const interpretation = score === 20 ? 'MA20 > MA50, 현재가가 MA20 위이며 이격 5% 이내의 상승 정렬입니다.' : score === 15 ? '상승 정렬이나 MA20 이격이 5% 초과~10% 이하로 과열을 일부 반영합니다.' : score === 8 ? '상승 정렬이나 MA20 이격이 10%를 넘어 과열 위험을 반영합니다.' : score === 5 ? 'MA20 아래 조정 중이나 MA50 위에 있어 제한된 추세 점수를 부여합니다.' : '가격과 MA20이 MA50 아래인 약세 정렬로 추세 점수를 부여하지 않습니다.';
+  return { id: 'moving-averages', title: '알트 이동평균', value: `${formatUsdWithKrw(price, usdKrwRate)} / MA20 ${formatUsdWithKrw(ma20, usdKrwRate)} / MA50 ${formatUsdWithKrw(ma50, usdKrwRate)}`, score, maxScore: 20, interpretation };
+}
+
 export function scoreMfi(value: number): IndicatorScore {
   let score: number;
   let interpretation: string;
@@ -267,6 +288,12 @@ export function scoreMfi(value: number): IndicatorScore {
     maxScore: 20,
     interpretation,
   };
+}
+
+export function scoreAltMfiWithVolume(input: { mfi: number; volume: number; previousVolume?: number }): IndicatorScore {
+  const base = scoreMfi(input.mfi);
+  const volumeSurge = input.previousVolume !== undefined && input.volume >= input.previousVolume * 2;
+  return { ...base, title: '알트 자금 흐름 MFI (14)', score: Math.min(25, base.score + (volumeSurge ? 5 : 0)), maxScore: 25, interpretation: `${base.interpretation}${volumeSurge ? ' 직전 동일 시간대 캔들 대비 거래량 200% 이상으로 5점 보너스를 적용합니다.' : ' 거래량 보너스는 직전 동일 시간대 캔들 대비 200% 이상일 때만 적용합니다.'}` };
 }
 
 export function scoreFunding(valuePercent: number): IndicatorScore {
@@ -356,6 +383,13 @@ export function scoreEthBtcStrength(current: number, ma20: number): IndicatorSco
   };
 }
 
+export function scoreAltBtcStrength(current: number, ma20: number): IndicatorScore {
+  if (current <= 0 || ma20 <= 0) throw new Error('ALT/BTC values must be positive.');
+  const distancePercent = ((current - ma20) / ma20) * 100;
+  const score = distancePercent >= 2 ? 15 : distancePercent <= -2 ? 0 : distancePercent >= 0 ? 8 : 4;
+  return { id: 'alt-btc-strength', title: 'ALT/BTC 상대강도', value: `${current.toFixed(8)} / MA20 ${ma20.toFixed(8)}`, score, maxScore: 15, interpretation: 'ALT/BTC가 MA20보다 2% 이상 강하면 15점, 2% 이상 약하면 0점이며 중간 구간은 방향별 부분 점수입니다.' };
+}
+
 export function signalForScore(score: number): Signal {
   if (score >= 80) return { label: '강력 매수', tone: 'positive' };
   if (score >= 60) return { label: '매수', tone: 'positive' };
@@ -365,7 +399,7 @@ export function signalForScore(score: number): Signal {
 }
 
 export function buildAssetSignal(input: {
-  symbol: 'BTC' | 'ETH';
+  symbol: AssetSymbol;
   name: string;
   price: number;
   closes?: number[];
@@ -376,6 +410,8 @@ export function buildAssetSignal(input: {
   priceChangePercent?: number;
   ethBtcCurrent?: number;
   ethBtcMa20?: number;
+  altBtcCurrent?: number;
+  altBtcMa20?: number;
   usdKrwRate?: number | null;
   stale?: boolean;
 }): AssetSignal {
@@ -387,14 +423,15 @@ export function buildAssetSignal(input: {
   const rsi = calculateRsi(closes, 14);
   const ma20 = calculateMovingAverage(closes, 20);
   const ma50 = calculateMovingAverage(closes, 50);
+  const isAlt = input.symbol !== 'BTC' && input.symbol !== 'ETH';
   const indicators = [
-    scoreMovingAverages(input.price, ma20, ma50, input.usdKrwRate ?? null),
-    scoreRsi(rsi),
+    isAlt ? scoreAltMovingAverages(input.price, ma20, ma50, input.usdKrwRate ?? null) : scoreMovingAverages(input.price, ma20, ma50, input.usdKrwRate ?? null),
+    isAlt ? scoreAltRsi(rsi) : scoreRsi(rsi),
   ];
   const missingFeatures: string[] = [];
 
   if (input.candles) {
-    indicators.push(scoreMfi(calculateMfi(input.candles, 14)));
+    indicators.push(isAlt ? scoreAltMfiWithVolume({ mfi: calculateMfi(input.candles, 14), volume: input.candles.at(-1)!.volume, previousVolume: input.candles.at(-2)?.volume }) : scoreMfi(calculateMfi(input.candles, 14)));
   } else {
     missingFeatures.push('mfi');
   }
@@ -413,10 +450,10 @@ export function buildAssetSignal(input: {
   if (input.fundingPercent !== undefined && (input.oiChangePercent === undefined || input.priceChangePercent === undefined)) {
     missingFeatures.push('open-interest');
   }
-  if (input.fearGreed === undefined) {
+  if (!isAlt && input.fearGreed === undefined) {
     missingFeatures.push('fear-greed');
-  } else {
-    indicators.push(scoreFearGreed(input.fearGreed));
+  } else if (!isAlt) {
+    indicators.push(scoreFearGreed(input.fearGreed!));
   }
 
   const rawScore = indicators.reduce((total, indicator) => total + indicator.score, 0);
@@ -426,7 +463,10 @@ export function buildAssetSignal(input: {
     input.symbol === 'ETH' && input.ethBtcCurrent !== undefined && input.ethBtcMa20 !== undefined
       ? scoreEthBtcStrength(input.ethBtcCurrent, input.ethBtcMa20)
       : null;
-  const overallScore = ethBtcIndicator ? clampScore(Math.round(baseScore * 0.95 + ethBtcIndicator.score * 0.05)) : baseScore;
+  const altBtcIndicator = isAlt && input.altBtcCurrent !== undefined && input.altBtcMa20 !== undefined ? scoreAltBtcStrength(input.altBtcCurrent, input.altBtcMa20) : null;
+  if (isAlt && !altBtcIndicator) missingFeatures.push('alt-btc-strength');
+  const altScore = altBtcIndicator ? clampScore(Math.round(((rawScore + altBtcIndicator.score) / (availableMaxScore + altBtcIndicator.maxScore)) * 100)) : baseScore;
+  const overallScore = ethBtcIndicator ? clampScore(Math.round(baseScore * 0.95 + ethBtcIndicator.score * 0.05)) : isAlt ? altScore : baseScore;
 
   return {
     symbol: input.symbol,
@@ -435,7 +475,7 @@ export function buildAssetSignal(input: {
     overallScore,
     signal: signalForScore(overallScore),
     stale: input.stale ?? false,
-    indicators: ethBtcIndicator ? [...indicators, ethBtcIndicator] : indicators,
+    indicators: ethBtcIndicator ? [...indicators, ethBtcIndicator] : altBtcIndicator ? [...indicators, altBtcIndicator] : indicators,
     missingFeatures,
     scorePolicy: SCORE_POLICY,
   };

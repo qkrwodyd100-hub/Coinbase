@@ -8,7 +8,7 @@ import {
   type ExtremeSignalAlert,
   type ExtremeSignalAlertState,
 } from '@/lib/alerts';
-import { formatUsdWithKrw, type AssetSignal, type DashboardPayload, type IndicatorId, type IndicatorScore, type SignalTone } from '@/lib/signals';
+import { formatUsdWithKrw, type AssetSignal, type AssetSymbol, type DashboardPayload, type IndicatorId, type IndicatorScore, type SignalTone } from '@/lib/signals';
 
 type LoadState = 'loading' | 'refreshing' | 'success' | 'failure';
 
@@ -86,11 +86,19 @@ const INDICATOR_DETAILS: Record<IndicatorId, IndicatorDetailMetadata> = {
     source: 'ETH/BTC 가격 비율과 20봉 이동평균 데이터를 사용합니다.',
     limitations: '상대강도는 ETH만의 보정 지표이며 BTC 화면에는 표시되지 않을 수 있습니다.',
   },
+  'alt-btc-strength': {
+    what: 'ALT/BTC 상대강도는 해당 알트코인이 BTC 대비 강한지 보는 상대 모멘텀 지표입니다.',
+    calculation: 'ALT/BTC 현재 비율과 20봉 단순 이동평균의 이격률을 계산합니다.',
+    scoreBasis: 'MA20보다 2% 이상 강하면 15점, 2% 이상 약하면 0점이며 중간 구간은 방향별 부분 점수를 부여합니다.',
+    interpretation: 'BTC 대비 강세는 알트 자체 모멘텀을 보완하지만 시장 전체 리스크를 상쇄하지는 않습니다.',
+    source: 'Binance 현물 ALT/BTC 캔들을 사용합니다.',
+    limitations: 'SHIB처럼 직접 BTC 페어가 없거나 데이터가 부족하면 이 지표를 제외하고 사용 가능한 가중치만 정규화합니다.',
+  },
 };
 
 export default function Home() {
   const [payload, setPayload] = useState<DashboardPayload | null>(null);
-  const [selectedSymbol, setSelectedSymbol] = useState<'BTC' | 'ETH'>('BTC');
+  const [selectedSymbol, setSelectedSymbol] = useState<AssetSymbol>('BTC');
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [error, setError] = useState<string | null>(null);
   const [alertsEnabled, setAlertsEnabled] = useState(true);
@@ -272,8 +280,8 @@ function DashboardContent({
 }: {
   assets: AssetSignal[];
   selectedAsset: AssetSignal;
-  selectedSymbol: 'BTC' | 'ETH';
-  onSelect: (symbol: 'BTC' | 'ETH') => void;
+  selectedSymbol: AssetSymbol;
+  onSelect: (symbol: AssetSymbol) => void;
   stale: boolean;
   usdKrwRate: number | null;
   backtestSummary: DashboardPayload['backtestSummary'] | null;
@@ -302,7 +310,7 @@ function DashboardContent({
   }, [selectedAsset.symbol, selectedIndicator]);
 
   const selectAsset = useCallback(
-    (symbol: 'BTC' | 'ETH') => {
+    (symbol: AssetSymbol) => {
       setSelectedIndicatorId(null);
       onSelect(symbol);
     },

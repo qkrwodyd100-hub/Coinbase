@@ -1,4 +1,4 @@
-import type { BacktestSummaryRow, MarketCandle } from './signals';
+import type { AssetSymbol, BacktestSummaryRow, MarketCandle } from './signals';
 
 export type BacktestSignalType = 'strong-buy' | 'strong-sell';
 
@@ -8,7 +8,7 @@ export type ScoredCandle = {
 };
 
 export type BacktestSignal = {
-  asset: 'BTC' | 'ETH';
+  asset: AssetSymbol;
   interval: '4h' | '1d';
   type: BacktestSignalType;
   signalOpenTime: number;
@@ -21,7 +21,7 @@ export type BacktestSignal = {
 };
 
 export type BacktestResult = {
-  asset: 'BTC' | 'ETH';
+  asset: AssetSymbol;
   interval: '4h' | '1d';
   horizonMs: number;
   lookAheadRule: string;
@@ -37,7 +37,7 @@ export type BacktestSummary = {
   dataLimitations: string[];
 };
 
-export function runBacktest(input: { asset: 'BTC' | 'ETH'; interval: '4h' | '1d'; horizonMs: number; scoredCandles: ScoredCandle[] }): BacktestResult {
+export function runBacktest(input: { asset: AssetSymbol; interval: '4h' | '1d'; horizonMs: number; scoredCandles: ScoredCandle[] }): BacktestResult {
   const signals: BacktestSignal[] = [];
   let previousType: BacktestSignalType | null = null;
   let excludedSignals = 0;
@@ -134,7 +134,7 @@ export function valueForUtcDate(rows: Array<{ date: string; value: number }>, ti
 }
 
 function evaluateSignal(
-  asset: 'BTC' | 'ETH',
+  asset: AssetSymbol,
   interval: '4h' | '1d',
   type: BacktestSignalType,
   signalOpenTime: number,

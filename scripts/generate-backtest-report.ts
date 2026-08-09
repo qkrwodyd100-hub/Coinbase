@@ -1,9 +1,9 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { buildAssetSignal, type MarketCandle } from '../src/lib/signals.ts';
+import { buildAssetSignal, type AssetSymbol, type MarketCandle } from '../src/lib/signals.ts';
 import { closedCandleBoundary, runBacktest, summarizeBacktest, valueForUtcDate, type ScoredCandle } from '../src/lib/backtest.ts';
 
-type Asset = 'BTC' | 'ETH';
+type Asset = AssetSymbol;
 type Interval = '4h' | '1d';
 
 type FundingRow = {
@@ -23,6 +23,8 @@ const OUTPUT_JSON = resolve('src/data/backtest-summary.json');
 const OUTPUT_MD = resolve('reports/backtest-report.md');
 const LOOKBACKS: Record<Interval, number> = { '4h': 365, '1d': 730 };
 const HORIZONS: Record<Interval, number> = { '4h': 24 * 60 * 60 * 1000, '1d': 7 * 24 * 60 * 60 * 1000 };
+const ASSETS: Asset[] = ['BTC', 'ETH', 'SHIB', 'FIL', 'STX', 'DOGE', 'ARB', 'XRP'];
+const ASSET_NAME: Record<Asset, string> = { BTC: '비트코인', ETH: '이더리움', SHIB: '시바이누', FIL: '파일코인', STX: '스택스', DOGE: '도지코인', ARB: '아비트럼', XRP: '엑스알피' };
 
 const mode = process.argv.includes('--fixture') ? 'fixture' : 'public';
 const smoke = process.argv.includes('--smoke');
@@ -59,7 +61,7 @@ console.log(JSON.stringify({ outputJson: OUTPUT_JSON, outputMarkdown: OUTPUT_MD,
 async function publicResults(smokeOnly: boolean) {
   const now = Date.now();
   const intervals: Interval[] = smokeOnly ? ['4h'] : ['4h', '1d'];
-  const assets: Asset[] = smokeOnly ? ['BTC'] : ['BTC', 'ETH'];
+  const assets: Asset[] = smokeOnly ? ['BTC', 'ETH', 'SHIB', 'FIL', 'STX', 'DOGE', 'ARB', 'XRP'] : ASSETS;
   const fng = await fetchFearGreed();
   const allResults = [];
 
@@ -68,7 +70,7 @@ async function publicResults(smokeOnly: boolean) {
     const start = end - LOOKBACKS[interval] * 24 * 60 * 60 * 1000;
     const ethBtc = await fetchKlines('ETHBTC', interval, start, end);
     for (const asset of assets) {
-      const symbol = asset === 'BTC' ? 'BTCUSDT' : 'ETHUSDT';
+      const symbol = `${asset}USDT`;
       const candles = await fetchKlines(symbol, interval, start, end);
       const funding = await fetchFunding(symbol, start, end);
       const scoredCandles = scoreCandles(asset, candles, fng, funding, ethBtc);
@@ -89,7 +91,7 @@ async function fixtureResults() {
     volume: 1000 + index * 10,
   }));
   const scoredCandles = candles.map((candle, index) => ({ candle, score: index === 20 ? 82 : index === 50 ? 18 : 45 }));
-  return [runBacktest({ asset: 'BTC', interval: '4h', horizonMs: HORIZONS['4h'], scoredCandles })];
+  return ASSETS.flatMap((asset) => (['4h', '1d'] as const).map((interval) => runBacktest({ asset, interval, horizonMs: HORIZONS[interval], scoredCandles })));
 }
 
 function scoreCandles(asset: Asset, candles: MarketCandle[], fng: FearGreedRow[], funding: FundingRow[], ethBtc: MarketCandle[]): ScoredCandle[] {
@@ -105,7 +107,7 @@ function scoreCandles(asset: Asset, candles: MarketCandle[], fng: FearGreedRow[]
     const previousClose = candles[index - 1]?.close ?? candle.open;
     const signal = buildAssetSignal({
       symbol: asset,
-      name: asset === 'BTC' ? '비트코인' : '이더리움',
+      name: ASSET_NAME[asset],
       price: candle.close,
       candles: history,
       fearGreed: fngValue,
