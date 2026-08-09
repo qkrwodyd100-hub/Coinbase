@@ -1,4 +1,4 @@
-import type { AssetSignal, IndicatorId } from '@/lib/signals';
+import { ASSET_SYMBOLS, type AssetSignal, type IndicatorId } from '@/lib/signals';
 
 export const ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
@@ -90,7 +90,7 @@ export function parseStoredAlertState(raw: string | null): ExtremeSignalAlertSta
     if (!isRecord(parsed)) return {};
 
     const state: ExtremeSignalAlertState = {};
-    for (const symbol of ['BTC', 'ETH'] as const) {
+    for (const symbol of ASSET_SYMBOLS) {
       const assetState = parsed[symbol];
       if (!isRecord(assetState) || typeof assetState.previousScore !== 'number' || !isRecord(assetState.lastSentAt)) continue;
 

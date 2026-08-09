@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AssetSignal } from '@/lib/signals';
+import type { AssetSignal, AssetSymbol } from '@/lib/signals';
 import {
   ALERT_COOLDOWN_MS,
   buildExtremeSignalAlertMessage,
@@ -17,11 +17,11 @@ const baseIndicators: AssetSignal['indicators'] = [
   { id: 'fear-greed', title: '공포·탐욕 지수', value: '22', score: 15, maxScore: 15, interpretation: '극단적 공포 구간은 역발상 가산점을 최대로 반영합니다.' },
 ];
 
-function asset(symbol: 'BTC' | 'ETH', score: number, indicators = baseIndicators): AssetSignal {
+function asset(symbol: AssetSymbol, score: number, indicators = baseIndicators): AssetSignal {
   return {
     symbol,
-    name: symbol === 'BTC' ? '비트코인' : '이더리움',
-    price: symbol === 'BTC' ? 65_000 : 3_200,
+    name: symbol === 'BTC' ? '비트코인' : symbol === 'ETH' ? '이더리움' : '시바이누',
+    price: symbol === 'BTC' ? 65_000 : symbol === 'ETH' ? 3_200 : 0.00001234,
     overallScore: score,
     signal: score >= 80 ? { label: '강력 매수', tone: 'positive' } : score <= 20 ? { label: '강력 매도', tone: 'negative' } : { label: '관망', tone: 'neutral' },
     stale: false,
@@ -121,6 +121,21 @@ describe('extreme signal alert decisions', () => {
 
     expect(result.alerts).toHaveLength(1);
     expect(result.alerts[0]).toMatchObject({ assetSymbol: 'BTC', type: 'strong-sell', score: 20 });
+  });
+
+  it('preserves a six-hour cooldown for each altcoin and restores its persisted alert state', () => {
+    const sentAt = 10_000;
+    const persisted = serializeAlertState({ SHIB: { previousScore: 79, lastSentAt: { 'strong-buy': sentAt } } });
+    const previousState = parseStoredAlertState(persisted);
+    expect(previousState).toEqual({ SHIB: { previousScore: 79, lastSentAt: { 'strong-buy': sentAt } } });
+
+    const blocked = evaluateExtremeSignalAlerts({ assets: [asset('SHIB', 82)], previousState, now: sentAt + ALERT_COOLDOWN_MS - 1 });
+    expect(blocked.alerts).toEqual([]);
+
+    const exited = evaluateExtremeSignalAlerts({ assets: [asset('SHIB', 70)], previousState: blocked.nextState, now: sentAt + ALERT_COOLDOWN_MS });
+    const reentered = evaluateExtremeSignalAlerts({ assets: [asset('SHIB', 82)], previousState: exited.nextState, now: sentAt + ALERT_COOLDOWN_MS + 1 });
+    expect(reentered.alerts).toHaveLength(1);
+    expect(reentered.alerts[0]).toMatchObject({ assetSymbol: 'SHIB', type: 'strong-buy', score: 82 });
   });
 
   it('ignores corrupted local storage state and serializes a recoverable state', () => {

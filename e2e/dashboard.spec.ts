@@ -140,6 +140,36 @@ test('dashboard renders Korean live data, KRW prices, and supports asset switchi
   await assertNoClientErrors();
 });
 
+test('eight asset tabs remain reachable on mobile without page overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const altSymbols = ['SHIB', 'FIL', 'STX', 'DOGE', 'ARB', 'XRP'] as const;
+  const eightAssetPayload = {
+    ...payload,
+    assets: [
+      ...payload.assets,
+      ...altSymbols.map((symbol, index) => ({
+        ...payload.assets[0],
+        symbol,
+        name: `${symbol} 코인`,
+        price: index === 0 ? 0.00001234 : index + 1,
+        overallScore: 60 + index,
+        signal: { label: '매수' as const, tone: 'positive' as const },
+        indicators: [{ id: 'alt-btc-strength' as const, title: 'ALT/BTC 상대강도', value: '0.00000012 / MA20 0.00000010', score: 15, maxScore: 15, interpretation: 'BTC 대비 강세입니다.' }],
+      })),
+    ],
+  };
+  await page.route('**/api/signals', (route) => route.fulfill({ json: eightAssetPayload }));
+
+  await page.goto('/');
+  const tablist = page.getByRole('tablist', { name: '자산 탭 목록' });
+  await expect(tablist.getByRole('tab')).toHaveCount(8);
+  await expectNoHorizontalOverflow(page);
+  await tablist.getByRole('tab', { name: /shib.*SHIB 코인/i }).click();
+  await expect(page.getByRole('heading', { name: 'SHIB 코인 시그널' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /ALT\/BTC 상대강도.*상세 설명 열기/i })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
 test('indicator cards open accessible details, close with Escape, and do not leave stale content after asset switching', async ({ page }) => {
   const assertNoClientErrors = expectNoClientErrors(page);
   await page.route('**/api/signals', (route) => route.fulfill({ json: payload }));

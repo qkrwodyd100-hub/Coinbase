@@ -1,6 +1,7 @@
 export type SignalTone = 'positive' | 'neutral' | 'negative';
 export type AssetSymbol = 'BTC' | 'ETH' | 'SHIB' | 'FIL' | 'STX' | 'DOGE' | 'ARB' | 'XRP';
 export type AltAssetSymbol = Exclude<AssetSymbol, 'BTC' | 'ETH'>;
+export const ASSET_SYMBOLS = ['BTC', 'ETH', 'SHIB', 'FIL', 'STX', 'DOGE', 'ARB', 'XRP'] as const satisfies readonly AssetSymbol[];
 export type IndicatorId = 'rsi' | 'fear-greed' | 'moving-averages' | 'funding' | 'mfi' | 'futures-positioning' | 'eth-btc-strength' | 'alt-btc-strength';
 
 export type MarketCandle = {

@@ -8,7 +8,7 @@ import {
   type ExtremeSignalAlert,
   type ExtremeSignalAlertState,
 } from '@/lib/alerts';
-import { formatUsdWithKrw, type AssetSignal, type AssetSymbol, type DashboardPayload, type IndicatorId, type IndicatorScore, type SignalTone } from '@/lib/signals';
+import { ASSET_SYMBOLS, formatUsdWithKrw, type AssetSignal, type AssetSymbol, type DashboardPayload, type IndicatorId, type IndicatorScore, type SignalTone } from '@/lib/signals';
 
 type LoadState = 'loading' | 'refreshing' | 'success' | 'failure';
 
@@ -206,7 +206,7 @@ export default function Home() {
         <header className="mb-6 flex flex-col gap-4 rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-black/30 backdrop-blur md:flex-row md:items-center md:justify-between">
           <div className="min-w-0">
             <p className="text-sm font-medium uppercase tracking-[0.28em] text-cyan-200/80 sm:tracking-[0.32em]">실시간 시장 시그널</p>
-            <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-5xl">BTC / ETH 시그널 대시보드</h1>
+            <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-5xl">크립토 시그널 대시보드</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
               점수는 MA20/MA50, RSI(14), MFI(14), Binance 선물 펀딩비·미체결약정, Alternative.me 공포·탐욕 지수를 종합합니다.
             </p>
@@ -320,7 +320,11 @@ function DashboardContent({
   return (
     <div className="grid min-w-0 flex-1 gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
       <aside className="min-w-0 space-y-4">
-        <div role="tablist" aria-label="자산 선택" className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-1">
+        <div
+          role="tablist"
+          aria-label="자산 탭 목록"
+          className="flex min-w-0 snap-x snap-mandatory gap-3 overflow-x-auto pb-2 pr-4 lg:grid lg:snap-none lg:overflow-visible lg:pb-0 lg:pr-0"
+        >
           {assets.map((asset) => (
             <button
               key={asset.symbol}
@@ -328,7 +332,7 @@ function DashboardContent({
               role="tab"
               aria-selected={asset.symbol === selectedSymbol}
               onClick={() => selectAsset(asset.symbol)}
-              className="min-w-0 rounded-3xl border border-white/10 bg-white/[0.06] p-4 text-left transition hover:bg-white/[0.10] focus:outline-none focus:ring-2 focus:ring-cyan-200/80 focus:ring-offset-2 focus:ring-offset-slate-950 motion-reduce:transition-none aria-selected:border-cyan-200/80 aria-selected:bg-cyan-200/15"
+              className="min-w-[13rem] snap-start rounded-3xl border border-white/10 bg-white/[0.06] p-4 text-left transition hover:bg-white/[0.10] focus:outline-none focus:ring-2 focus:ring-cyan-200/80 focus:ring-offset-2 focus:ring-offset-slate-950 motion-reduce:transition-none aria-selected:border-cyan-200/80 aria-selected:bg-cyan-200/15 lg:min-w-0"
             >
               <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
@@ -347,7 +351,7 @@ function DashboardContent({
         <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-5 text-sm leading-6 text-slate-300">
           <h2 className="font-bold text-slate-100">점수 산정 메모</h2>
           <p className="mt-2">
-            지표 결측은 0점이나 만점으로 숨기지 않고 사용 가능한 가중치만 100점으로 정규화합니다. ETH는 기본 점수 95%와 ETH/BTC 상대강도 5%를 혼합합니다.
+            지표 결측은 0점이나 만점으로 숨기지 않고 사용 가능한 가중치만 100점으로 정규화합니다. ETH는 ETH/BTC, 알트코인은 ALT/BTC 상대강도를 함께 반영합니다.
           </p>
         </div>
         <AlertSettings
@@ -623,7 +627,7 @@ function AlertSettings({
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h2 className="font-bold text-slate-100">극단 시그널 알람</h2>
-          <p className="mt-1 text-slate-300">80점 이상 재진입과 20점 이하 재진입을 BTC/ETH별로 감시합니다.</p>
+          <p className="mt-1 text-slate-300">80점 이상 재진입과 20점 이하 재진입을 자산·유형별로 감시하며 각각 6시간 cooldown을 적용합니다.</p>
         </div>
         <button
           type="button"
@@ -687,8 +691,8 @@ function BacktestSummary({ summary }: { summary: NonNullable<DashboardPayload['b
       <p className="mt-2 text-xs text-slate-400">
         {summary.source} · {new Date(summary.generatedAt).toLocaleDateString('ko-KR', { timeZone: 'UTC' })}
       </p>
-      <div className="mt-4 space-y-3">
-        {summary.rows.slice(0, 4).map((row) => (
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {summary.rows.map((row) => (
           <div key={`${row.asset}-${row.interval}-${row.signalType}`} className="rounded-2xl bg-black/20 p-3">
             <div className="font-bold text-slate-100">
               {row.asset} {row.interval} {row.signalType === 'strong-buy' ? '강력 매수' : '강력 매도'}
@@ -798,7 +802,7 @@ function isStoredAlert(value: unknown): value is ExtremeSignalAlert {
   if (typeof value !== 'object' || value === null) return false;
   const alert = value as Partial<ExtremeSignalAlert>;
   return (
-    (alert.assetSymbol === 'BTC' || alert.assetSymbol === 'ETH') &&
+    ASSET_SYMBOLS.includes(alert.assetSymbol as AssetSymbol) &&
     (alert.type === 'strong-buy' || alert.type === 'strong-sell') &&
     typeof alert.score === 'number' &&
     typeof alert.createdAt === 'number' &&

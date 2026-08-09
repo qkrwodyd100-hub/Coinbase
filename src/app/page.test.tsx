@@ -78,7 +78,7 @@ describe('dashboard behavior', () => {
     render(createElement(Home));
 
     expect(await screen.findByRole('heading', { name: /비트코인 시그널/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'BTC / ETH 시그널 대시보드' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '크립토 시그널 대시보드' })).toBeInTheDocument();
     expect(screen.getAllByText('$65,000 · ₩89,050,000').length).toBeGreaterThan(0);
     expect(screen.getAllByText('강력 매수').length).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: '선물 펀딩비·미체결약정' })).toBeInTheDocument();
@@ -101,6 +101,32 @@ describe('dashboard behavior', () => {
     const ethereumMeter = screen.getByRole('meter', { name: /이더리움 시그널 점수/i });
     expect(ethereumMeter.querySelector('circle.stroke-amber-300')).toBeInTheDocument();
     expect(within(ethereumMeter).getByText('관망')).toHaveClass('text-amber-100');
+  });
+
+  it('keeps all eight asset choices in a compact horizontal tab strip and switches to SHIB', async () => {
+    const altSymbols = ['SHIB', 'FIL', 'STX', 'DOGE', 'ARB', 'XRP'] as const;
+    const allAssets = [
+      ...okPayload.assets,
+      ...altSymbols.map((symbol, index) => ({
+        ...okPayload.assets[0],
+        symbol,
+        name: `${symbol} 코인`,
+        price: index === 0 ? 0.00001234 : index + 1,
+        overallScore: 60 + index,
+        signal: { label: '매수' as const, tone: 'positive' as const },
+        indicators: [{ id: 'alt-btc-strength' as const, title: 'ALT/BTC 상대강도', value: '0.00000012 / MA20 0.00000010', score: 15, maxScore: 15, interpretation: 'BTC 대비 강세입니다.' }],
+      })),
+    ];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ...okPayload, assets: allAssets }) }));
+
+    render(createElement(Home));
+
+    const tablist = await screen.findByRole('tablist', { name: '자산 탭 목록' });
+    expect(within(tablist).getAllByRole('tab')).toHaveLength(8);
+    expect(tablist).toHaveClass('overflow-x-auto');
+    await userEvent.click(within(tablist).getByRole('tab', { name: /shib.*SHIB 코인/i }));
+    expect(screen.getByRole('heading', { name: 'SHIB 코인 시그널' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ALT\/BTC 상대강도.*상세 설명 열기/i })).toBeInTheDocument();
   });
 
   it('opens accessible indicator details by pointer and closes with Escape while restoring focus', async () => {
