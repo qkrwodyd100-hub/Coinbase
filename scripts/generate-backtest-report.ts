@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import type { AssetSymbol, MarketCandle } from '../src/lib/signals.ts';
+import { deriveBtcRelativeCandles } from '../src/lib/btc-relative.ts';
 import { closedCandleBoundary, runBacktest, summarizeBacktest } from '../src/lib/backtest.ts';
 import { scoreBacktestCandles } from '../src/lib/backtest-scoring.ts';
 
@@ -113,12 +114,7 @@ async function fetchAltBtcKlines(asset: Asset, interval: Interval, startTime: nu
     fetchKlines('SHIBUSDT', interval, startTime, endTime),
     fetchKlines('BTCUSDT', interval, startTime, endTime),
   ]);
-  return shibUsd.flatMap((candle, index) => {
-    const btc = btcUsd[index];
-    return btc && btc.open > 0 && btc.high > 0 && btc.low > 0 && btc.close > 0
-      ? [{ ...candle, open: candle.open / btc.open, high: candle.high / btc.high, low: candle.low / btc.low, close: candle.close / btc.close }]
-      : [];
-  });
+  return deriveBtcRelativeCandles(shibUsd, btcUsd);
 }
 
 async function fetchKlines(symbol: string, interval: Interval, startTime: number, endTime: number): Promise<MarketCandle[]> {

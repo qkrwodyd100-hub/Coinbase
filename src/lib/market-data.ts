@@ -1,4 +1,5 @@
 import { buildAssetSignal, type AssetSignal, type AssetSymbol, type BacktestSummaryRow, type DashboardPayload, type MarketCandle } from './signals';
+import { deriveBtcRelativeCandles } from './btc-relative';
 import backtestSummary from '@/data/backtest-summary.json';
 
 const STATIC_BACKTEST_SUMMARY = backtestSummary as {
@@ -87,12 +88,7 @@ async function getAssetSignal(
 async function getAltBtcCandles(asset: AssetConfig): Promise<MarketCandle[]> {
   if (asset.symbol === 'SHIB') {
     const [shibUsd, btcUsd] = await Promise.all([getSpotCandles('SHIBUSDT', '1d', 80), getSpotCandles('BTCUSDT', '1d', 80)]);
-    return shibUsd.flatMap((candle, index) => {
-      const btc = btcUsd[index];
-      return btc && btc.open > 0 && btc.high > 0 && btc.low > 0 && btc.close > 0
-        ? [{ ...candle, open: candle.open / btc.open, high: candle.high / btc.high, low: candle.low / btc.low, close: candle.close / btc.close }]
-        : [];
-    });
+    return deriveBtcRelativeCandles(shibUsd, btcUsd);
   }
   return asset.btcSymbol ? getSpotCandles(asset.btcSymbol, '1d', 80) : [];
 }
