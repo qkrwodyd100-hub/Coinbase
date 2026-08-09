@@ -145,6 +145,10 @@ describe('signal scoring thresholds', () => {
 });
 
 describe('currency formatting', () => {
+  it('preserves meaningful decimal precision for sub-cent altcoin prices', () => {
+    expect(formatUsdWithKrw(0.00001234, null)).toBe('$0.00001234');
+  });
+
   it('formats KRW without misleading decimals', () => {
     expect(formatKrw(89_000_000)).toBe('₩89,000,000');
   });

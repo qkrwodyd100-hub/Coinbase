@@ -164,10 +164,14 @@ test('eight asset tabs remain reachable on mobile without page overflow', async 
   const tablist = page.getByRole('tablist', { name: '자산 탭 목록' });
   await expect(tablist.getByRole('tab')).toHaveCount(8);
   await expectNoHorizontalOverflow(page);
-  await tablist.getByRole('tab', { name: /shib.*SHIB 코인/i }).click();
-  await expect(page.getByRole('heading', { name: 'SHIB 코인 시그널' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /ALT\/BTC 상대강도.*상세 설명 열기/i })).toBeVisible();
-  await expectNoHorizontalOverflow(page);
+  for (const symbol of altSymbols) {
+    await tablist.getByRole('tab', { name: new RegExp(`${symbol}.*${symbol} 코인`, 'i') }).click();
+    await expect(page.getByRole('heading', { name: `${symbol} 코인 시그널` })).toBeVisible();
+    await expect(page.getByRole('button', { name: /ALT\/BTC 상대강도.*상세 설명 열기/i })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  }
+
+  await expect(tablist.getByRole('tab', { name: /shib.*SHIB 코인/i }).getByText('$0.00001234')).toBeVisible();
 });
 
 test('indicator cards open accessible details, close with Escape, and do not leave stale content after asset switching', async ({ page }) => {

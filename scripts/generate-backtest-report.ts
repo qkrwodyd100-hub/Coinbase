@@ -1,7 +1,8 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { buildAssetSignal, type AssetSymbol, type MarketCandle } from '../src/lib/signals.ts';
-import { closedCandleBoundary, runBacktest, summarizeBacktest, valueForUtcDate, type ScoredCandle } from '../src/lib/backtest.ts';
+import type { AssetSymbol, MarketCandle } from '../src/lib/signals.ts';
+import { closedCandleBoundary, runBacktest, summarizeBacktest } from '../src/lib/backtest.ts';
+import { scoreBacktestCandles } from '../src/lib/backtest-scoring.ts';
 
 type Asset = AssetSymbol;
 type Interval = '4h' | '1d';
@@ -24,7 +25,7 @@ const OUTPUT_MD = resolve('reports/backtest-report.md');
 const LOOKBACKS: Record<Interval, number> = { '4h': 365, '1d': 730 };
 const HORIZONS: Record<Interval, number> = { '4h': 24 * 60 * 60 * 1000, '1d': 7 * 24 * 60 * 60 * 1000 };
 const ASSETS: Asset[] = ['BTC', 'ETH', 'SHIB', 'FIL', 'STX', 'DOGE', 'ARB', 'XRP'];
-const ASSET_NAME: Record<Asset, string> = { BTC: '비트코인', ETH: '이더리움', SHIB: '시바이누', FIL: '파일코인', STX: '스택스', DOGE: '도지코인', ARB: '아비트럼', XRP: '엑스알피' };
+
 
 const mode = process.argv.includes('--fixture') ? 'fixture' : 'public';
 const smoke = process.argv.includes('--smoke');
@@ -71,9 +72,19 @@ async function publicResults(smokeOnly: boolean) {
     const ethBtc = await fetchKlines('ETHBTC', interval, start, end);
     for (const asset of assets) {
       const symbol = `${asset}USDT`;
-      const candles = await fetchKlines(symbol, interval, start, end);
-      const funding = await fetchFunding(symbol, start, end);
-      const scoredCandles = scoreCandles(asset, candles, fng, funding, ethBtc);
+      const [candles, funding, altBtc] = await Promise.all([
+        fetchKlines(symbol, interval, start, end),
+        fetchFunding(symbol, start, end),
+        fetchAltBtcKlines(asset, interval, start, end),
+      ]);
+      const scoredCandles = scoreBacktestCandles({
+        asset,
+        candles,
+        fearGreed: fng,
+        funding,
+        ethBtcCandles: ethBtc,
+        altBtcCandles: altBtc,
+      }).map(({ candle, score }) => ({ candle, score }));
       allResults.push(runBacktest({ asset, interval, horizonMs: HORIZONS[interval], scoredCandles }));
     }
   }
@@ -94,31 +105,20 @@ async function fixtureResults() {
   return ASSETS.flatMap((asset) => (['4h', '1d'] as const).map((interval) => runBacktest({ asset, interval, horizonMs: HORIZONS[interval], scoredCandles })));
 }
 
-function scoreCandles(asset: Asset, candles: MarketCandle[], fng: FearGreedRow[], funding: FundingRow[], ethBtc: MarketCandle[]): ScoredCandle[] {
-  const scored: ScoredCandle[] = [];
-  for (let index = 50; index < candles.length; index += 1) {
-    const history = candles.slice(0, index + 1);
-    const candle = candles[index];
-    const fngValue = valueForUtcDate(fng, candle.openTime);
-    const fundingValue = fundingForTime(funding, candle.openTime);
-    const ethHistory = ethBtc.filter((item) => item.openTime <= candle.openTime);
-    const ethBtcCurrent = ethHistory.at(-1)?.close;
-    const ethBtcMa20 = ethHistory.length >= 20 ? average(ethHistory.slice(-20).map((item) => item.close)) : undefined;
-    const previousClose = candles[index - 1]?.close ?? candle.open;
-    const signal = buildAssetSignal({
-      symbol: asset,
-      name: ASSET_NAME[asset],
-      price: candle.close,
-      candles: history,
-      fearGreed: fngValue,
-      fundingPercent: fundingValue,
-      priceChangePercent: ((candle.close - previousClose) / previousClose) * 100,
-      ethBtcCurrent: asset === 'ETH' ? ethBtcCurrent : undefined,
-      ethBtcMa20: asset === 'ETH' ? ethBtcMa20 : undefined,
-    });
-    scored.push({ candle, score: signal.overallScore });
-  }
-  return scored;
+async function fetchAltBtcKlines(asset: Asset, interval: Interval, startTime: number, endTime: number): Promise<MarketCandle[]> {
+  if (asset === 'BTC' || asset === 'ETH') return [];
+  if (asset !== 'SHIB') return fetchKlines(`${asset}BTC`, interval, startTime, endTime);
+
+  const [shibUsd, btcUsd] = await Promise.all([
+    fetchKlines('SHIBUSDT', interval, startTime, endTime),
+    fetchKlines('BTCUSDT', interval, startTime, endTime),
+  ]);
+  return shibUsd.flatMap((candle, index) => {
+    const btc = btcUsd[index];
+    return btc && btc.open > 0 && btc.high > 0 && btc.low > 0 && btc.close > 0
+      ? [{ ...candle, open: candle.open / btc.open, high: candle.high / btc.high, low: candle.low / btc.low, close: candle.close / btc.close }]
+      : [];
+  });
 }
 
 async function fetchKlines(symbol: string, interval: Interval, startTime: number, endTime: number): Promise<MarketCandle[]> {
@@ -183,13 +183,6 @@ function parseKline(row: unknown, label: string): MarketCandle {
   };
 }
 
-function fundingForTime(rows: FundingRow[], time: number): number | undefined {
-  for (let index = rows.length - 1; index >= 0; index -= 1) {
-    if (rows[index].fundingTime <= time) return rows[index].fundingRatePercent;
-  }
-  return undefined;
-}
-
 
 function writeJson(path: string, value: unknown) {
   return writeText(path, `${JSON.stringify(value, null, 2)}\n`);
@@ -238,10 +231,6 @@ function intervalMs(interval: Interval): number {
   return interval === '4h' ? 4 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
 }
 
-
-function average(values: number[]): number {
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
