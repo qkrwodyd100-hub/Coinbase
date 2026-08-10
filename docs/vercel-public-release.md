@@ -1,4 +1,4 @@
-# Vercel 공개 배포 환경변수 가이드
+# Vercel 공개 배포 및 Git integration 운영 가이드
 
 이 문서는 `qkrwodyd100-hub/Coinbase`를 공개 저장소로 전환하기 전에 Vercel 설정을 안전하게 확인하기 위한 운영 가이드입니다. 실제 토큰, 키, 비밀번호, webhook URL 전체 값은 이 문서나 저장소에 기록하지 않습니다.
 
@@ -8,6 +8,64 @@
 - 시장 데이터는 인증이 필요 없는 공개 API를 서버의 `GET /api/signals`에서 호출합니다.
 - 따라서 현재 Vercel에서 새 환경변수를 입력할 필요가 없습니다.
 - `.env.example`에는 의도적으로 환경변수 할당이나 실제 값, placeholder가 없습니다. 향후 환경변수가 필요해질 때까지 주석만 있는 상태가 올바릅니다.
+
+## `public` Output Directory 오류의 원인과 저장소 설정
+
+이 저장소는 루트 `package.json`의 `build` script로 `next build`를 실행하는 Next.js 애플리케이션이며, 로컬 빌드 산출물은 `.next/`입니다. 정적 사이트용 `public/` 산출물을 만드는 script도, 추적된 `public/` 디렉터리도 없습니다. 따라서 다음 오류는 저장소 build가 `public/` 생성을 빠뜨렸다는 뜻이 아니라 Vercel 프로젝트의 **Output Directory override가 `public`으로 남아 있었다는 증거**입니다.
+
+```text
+No Output Directory named public found after the Build completed
+```
+
+루트 `vercel.json`은 Git deployment마다 다음 값을 적용합니다.
+
+- `framework: "nextjs"`: Dashboard의 오래된 Framework Preset보다 저장소의 실제 프레임워크를 우선합니다.
+- `buildCommand: "npm run build"`: `package.json`과 같은 build를 사용합니다.
+- `outputDirectory: null`: `public` 같은 수동 경로를 사용하지 않고 Vercel이 Next.js 산출물을 자동 감지하게 합니다. Vercel schema에서도 `null`은 자동 감지를 뜻합니다.
+
+`.next`를 수동 Output Directory로 고정하지 않습니다. Next.js의 route handler와 서버 산출물은 단순 정적 디렉터리 배포가 아니므로 Vercel의 Next.js framework 처리를 유지해야 합니다.
+
+## CLI 없이 Dashboard + Git으로 배포 복구
+
+### 1. Project Settings 확인
+
+Vercel Dashboard에서 프로젝트를 열고 **Settings → Build and Deployment**에서 확인합니다.
+
+| 항목 | 값 | 이유 |
+| --- | --- | --- |
+| Root Directory | 비어 있음 (`.`), Override 해제 | `package.json`, `next.config.ts`, `vercel.json`이 저장소 루트에 있습니다. |
+| Framework Preset | `Next.js` | App Router와 `src/app/api/signals/route.ts`를 Next.js로 빌드해야 합니다. |
+| Build Command | Override 해제 권장. 켜져 있다면 `npm run build` | 저장소의 검증된 build script와 일치시킵니다. |
+| Output Directory | Override 해제하고 자동 감지 | `public`을 제거하고 Next.js framework 산출물을 Vercel이 처리하게 합니다. |
+
+`vercel.json`이 Framework, Build Command, Output Directory를 Git commit 단위로 고정하지만 Root Directory는 Dashboard 프로젝트 설정입니다. 저장소 하위 폴더를 Root Directory로 선택하면 `vercel.json`과 `package.json`을 찾지 못하므로 반드시 루트를 선택합니다.
+
+### 2. Git 연결과 새 배포 트리거
+
+1. **Settings → Git**에서 연결 저장소가 `qkrwodyd100-hub/Coinbase`, Production Branch가 `main`인지 확인합니다.
+2. 검증된 수정 commit을 `main`에 push합니다. Git integration이 그 commit으로 새 Production deployment를 생성하므로 Vercel CLI 설치나 로그인이 필요하지 않습니다.
+3. **Deployments**에서 해당 `main` commit의 deployment가 생성되었는지 확인합니다. 이전 실패 deployment를 성공으로 오인하지 않습니다.
+
+### 3. 배포 로그 판독
+
+새 deployment의 **Build Logs**에서 다음 순서로 확인합니다.
+
+1. clone된 branch와 commit이 방금 push한 `main` commit인지 확인합니다.
+2. Root Directory에서 루트 `package.json`을 읽고 dependency install이 성공하는지 확인합니다.
+3. Framework가 Next.js로 감지되고 `npm run build`/`next build`가 실행되는지 확인합니다.
+4. build가 `/`, `/_not-found`, `/api/signals` route를 생성한 뒤 성공하는지 확인합니다.
+5. 로그 끝에 `public` 디렉터리를 찾는 오류가 다시 나오지 않는지 확인합니다.
+
+같은 `public` 오류가 재발하면 해당 deployment가 수정 commit을 사용했는지 먼저 확인하고, Dashboard의 Output Directory override를 해제한 뒤 새 `main` push 또는 아래 Redeploy 절차를 사용합니다.
+
+### 4. Redeploy 사용 조건
+
+- **새 commit이 있으면:** `main` push로 새 deployment를 만드는 것을 우선합니다.
+- **설정만 바꾸었고 commit은 그대로면:** **Deployments → 대상 deployment → Redeploy**를 사용합니다.
+- 캐시된 잘못된 설정/산출물이 의심될 때만 Redeploy 화면에서 build cache를 사용하지 않는 옵션을 선택합니다. 평상시마다 캐시를 지울 필요는 없습니다.
+- 반드시 수정된 설정과 올바른 commit을 가리키는 deployment를 선택합니다. 실패한 과거 deployment를 설정 수정 전에 그대로 재실행하지 않습니다.
+
+CLI가 설치되지 않았거나 Vercel 계정·팀 권한 때문에 CLI로 프로젝트를 link할 수 없어도 위 절차에는 영향이 없습니다. Dashboard에서 프로젝트 설정과 deployment 로그를 보고, GitHub의 `main` push를 배포 트리거로 사용하면 됩니다. CLI 설치/로그인을 오류 해결의 선행조건으로 강제하지 않습니다.
 
 ## 공개 전 Vercel 확인 절차
 
