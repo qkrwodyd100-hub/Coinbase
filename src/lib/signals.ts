@@ -53,6 +53,18 @@ export type BacktestSummaryRow = {
   averageMaxAdversePercent: number;
 };
 
+export type BacktestReport = {
+  asset: AssetSymbol;
+  interval: '4h' | '1d';
+  dataStart: string;
+  dataEnd: string;
+  candleCount: number;
+  evaluatedSignals: number;
+  excludedSignals: number;
+  horizon: string;
+  lookAheadRule: string;
+};
+
 export type DashboardPayload = {
   asOf: string;
   usdKrwRate: number | null;
@@ -63,6 +75,7 @@ export type DashboardPayload = {
     source: string;
     rows: BacktestSummaryRow[];
     dataLimitations: string[];
+    reports: BacktestReport[];
   };
 };
 

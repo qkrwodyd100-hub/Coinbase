@@ -1,4 +1,4 @@
-import { buildAssetSignal, type AssetSignal, type AssetSymbol, type BacktestSummaryRow, type DashboardPayload, type MarketCandle } from './signals';
+import { buildAssetSignal, type AssetSignal, type AssetSymbol, type BacktestReport, type BacktestSummaryRow, type DashboardPayload, type MarketCandle } from './signals';
 import { deriveBtcRelativeCandles } from './btc-relative';
 import backtestSummary from '@/data/backtest-summary.json';
 
@@ -7,6 +7,7 @@ const STATIC_BACKTEST_SUMMARY = backtestSummary as {
   source: string;
   rows: BacktestSummaryRow[];
   dataLimitations: string[];
+  reports: BacktestReport[];
 };
 
 type AssetConfig = {

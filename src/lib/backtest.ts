@@ -29,6 +29,7 @@ export type BacktestResult = {
   excludedSignals: number;
   dataStart: number | null;
   dataEnd: number | null;
+  extremeStateBars: Record<BacktestSignalType, number>;
 };
 
 export type BacktestSummary = {
@@ -87,6 +88,10 @@ export function runBacktest(input: { asset: AssetSymbol; interval: '4h' | '1d'; 
     excludedSignals,
     dataStart: input.scoredCandles[0]?.candle.openTime ?? null,
     dataEnd: input.scoredCandles.at(-1)?.candle.openTime ?? null,
+    extremeStateBars: {
+      'strong-buy': input.scoredCandles.filter((item) => item.score >= 80).length,
+      'strong-sell': input.scoredCandles.filter((item) => item.score <= 20).length,
+    },
   };
 }
 

@@ -685,11 +685,17 @@ function InAppAlert({ alert }: { alert: ExtremeSignalAlert }) {
 }
 
 function BacktestSummary({ summary }: { summary: NonNullable<DashboardPayload['backtestSummary']> }) {
+  const totalEvaluated = summary.reports.reduce((total, report) => total + report.evaluatedSignals, 0);
+  const totalExcluded = summary.reports.reduce((total, report) => total + report.excludedSignals, 0);
+  const btc4h = summary.reports.find((report) => report.asset === 'BTC' && report.interval === '4h');
   return (
     <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-5 text-sm leading-6 text-slate-300">
       <h2 className="font-bold text-slate-100">복합 백테스트 요약</h2>
       <p className="mt-2 text-xs text-slate-400">
         {summary.source} · {new Date(summary.generatedAt).toLocaleDateString('ko-KR', { timeZone: 'UTC' })}
+      </p>
+      <p className="mt-2 text-xs text-slate-300">
+        실제 기간: BTC 4h {btc4h ? `${new Date(btc4h.dataStart).toLocaleDateString('ko-KR', { timeZone: 'UTC' })}–${new Date(btc4h.dataEnd).toLocaleDateString('ko-KR', { timeZone: 'UTC' })}` : '확인 불가'} · 평가 {totalEvaluated}건 · 제외 {totalExcluded}건
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {summary.rows.map((row) => (
@@ -703,7 +709,7 @@ function BacktestSummary({ summary }: { summary: NonNullable<DashboardPayload['b
           </div>
         ))}
       </div>
-      <p className="mt-3 text-xs text-amber-100">룩어헤드 방지: 캔들 확정 후 다음 관측 가능 봉의 시가를 진입가로 사용합니다.</p>
+      <p className="mt-3 text-xs text-amber-100">신호 횟수는 ≥80/≤20 구간에 머문 봉 수가 아니라 새 진입(&lt;80→≥80, &gt;20→≤20)만 집계합니다. 알림 발송은 별도로 자산·유형별 6시간 cooldown을 적용합니다. 룩어헤드 방지: 캔들 확정 후 다음 관측 가능 봉의 시가를 진입가로 사용합니다.</p>
     </div>
   );
 }

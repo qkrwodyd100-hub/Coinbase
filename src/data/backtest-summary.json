@@ -1,196 +1,220 @@
 {
-  "generatedAt": "2026-08-09T12:53:46.527Z",
+  "generatedAt": "2026-08-13T01:27:08.829Z",
   "rows": [
     {
       "asset": "BTC",
       "interval": "4h",
       "signalType": "strong-buy",
+      "signalCount": 2,
+      "hitCount": 2,
+      "hitRatePercent": 100,
+      "averageCloseReturnPercent": 4.53,
+      "averageMaxFavorablePercent": 5.16,
+      "averageMaxAdversePercent": -1.57
+    },
+    {
+      "asset": "ETH",
+      "interval": "4h",
+      "signalType": "strong-buy",
+      "signalCount": 2,
+      "hitCount": 0,
+      "hitRatePercent": 0,
+      "averageCloseReturnPercent": -0.35,
+      "averageMaxFavorablePercent": 0.86,
+      "averageMaxAdversePercent": -1.65
+    },
+    {
+      "asset": "SHIB",
+      "interval": "4h",
+      "signalType": "strong-sell",
+      "signalCount": 8,
+      "hitCount": 6,
+      "hitRatePercent": 75,
+      "averageCloseReturnPercent": -2.79,
+      "averageMaxFavorablePercent": 4.17,
+      "averageMaxAdversePercent": -0.73
+    },
+    {
+      "asset": "STX",
+      "interval": "4h",
+      "signalType": "strong-buy",
       "signalCount": 1,
       "hitCount": 1,
       "hitRatePercent": 100,
-      "averageCloseReturnPercent": 1.67,
-      "averageMaxFavorablePercent": 3.72,
-      "averageMaxAdversePercent": -2.99
+      "averageCloseReturnPercent": 3.94,
+      "averageMaxFavorablePercent": 5.09,
+      "averageMaxAdversePercent": -1.84
     },
     {
       "asset": "BTC",
-      "interval": "4h",
+      "interval": "1d",
       "signalType": "strong-sell",
-      "signalCount": 1,
+      "signalCount": 2,
       "hitCount": 1,
-      "hitRatePercent": 100,
-      "averageCloseReturnPercent": 6.95,
-      "averageMaxFavorablePercent": 4.33,
-      "averageMaxAdversePercent": -5.04
+      "hitRatePercent": 50,
+      "averageCloseReturnPercent": 4.75,
+      "averageMaxFavorablePercent": 2.89,
+      "averageMaxAdversePercent": -7.78
     },
     {
       "asset": "ETH",
-      "interval": "4h",
-      "signalType": "strong-buy",
-      "signalCount": 1,
-      "hitCount": 1,
-      "hitRatePercent": 100,
-      "averageCloseReturnPercent": 1.67,
-      "averageMaxFavorablePercent": 3.72,
-      "averageMaxAdversePercent": -2.99
-    },
-    {
-      "asset": "ETH",
-      "interval": "4h",
+      "interval": "1d",
       "signalType": "strong-sell",
       "signalCount": 1,
       "hitCount": 1,
       "hitRatePercent": 100,
-      "averageCloseReturnPercent": 6.95,
-      "averageMaxFavorablePercent": 4.33,
-      "averageMaxAdversePercent": -5.04
+      "averageCloseReturnPercent": -4.2,
+      "averageMaxFavorablePercent": 7.07,
+      "averageMaxAdversePercent": -2.69
     },
     {
       "asset": "SHIB",
-      "interval": "4h",
-      "signalType": "strong-buy",
-      "signalCount": 1,
-      "hitCount": 1,
-      "hitRatePercent": 100,
-      "averageCloseReturnPercent": 1.67,
-      "averageMaxFavorablePercent": 3.72,
-      "averageMaxAdversePercent": -2.99
-    },
-    {
-      "asset": "SHIB",
-      "interval": "4h",
+      "interval": "1d",
       "signalType": "strong-sell",
-      "signalCount": 1,
-      "hitCount": 1,
+      "signalCount": 2,
+      "hitCount": 2,
       "hitRatePercent": 100,
-      "averageCloseReturnPercent": 6.95,
-      "averageMaxFavorablePercent": 4.33,
-      "averageMaxAdversePercent": -5.04
+      "averageCloseReturnPercent": -10.53,
+      "averageMaxFavorablePercent": 30.87,
+      "averageMaxAdversePercent": -1.08
     },
     {
       "asset": "FIL",
-      "interval": "4h",
-      "signalType": "strong-buy",
-      "signalCount": 1,
-      "hitCount": 1,
-      "hitRatePercent": 100,
-      "averageCloseReturnPercent": 1.67,
-      "averageMaxFavorablePercent": 3.72,
-      "averageMaxAdversePercent": -2.99
-    },
-    {
-      "asset": "FIL",
-      "interval": "4h",
+      "interval": "1d",
       "signalType": "strong-sell",
-      "signalCount": 1,
-      "hitCount": 1,
+      "signalCount": 2,
+      "hitCount": 2,
       "hitRatePercent": 100,
-      "averageCloseReturnPercent": 6.95,
-      "averageMaxFavorablePercent": 4.33,
-      "averageMaxAdversePercent": -5.04
+      "averageCloseReturnPercent": 5.33,
+      "averageMaxFavorablePercent": 12.82,
+      "averageMaxAdversePercent": -10.7
     },
     {
       "asset": "STX",
-      "interval": "4h",
-      "signalType": "strong-buy",
-      "signalCount": 1,
-      "hitCount": 1,
-      "hitRatePercent": 100,
-      "averageCloseReturnPercent": 1.67,
-      "averageMaxFavorablePercent": 3.72,
-      "averageMaxAdversePercent": -2.99
-    },
-    {
-      "asset": "STX",
-      "interval": "4h",
+      "interval": "1d",
       "signalType": "strong-sell",
-      "signalCount": 1,
-      "hitCount": 1,
+      "signalCount": 3,
+      "hitCount": 3,
       "hitRatePercent": 100,
-      "averageCloseReturnPercent": 6.95,
-      "averageMaxFavorablePercent": 4.33,
-      "averageMaxAdversePercent": -5.04
-    },
-    {
-      "asset": "DOGE",
-      "interval": "4h",
-      "signalType": "strong-buy",
-      "signalCount": 1,
-      "hitCount": 1,
-      "hitRatePercent": 100,
-      "averageCloseReturnPercent": 1.67,
-      "averageMaxFavorablePercent": 3.72,
-      "averageMaxAdversePercent": -2.99
-    },
-    {
-      "asset": "DOGE",
-      "interval": "4h",
-      "signalType": "strong-sell",
-      "signalCount": 1,
-      "hitCount": 1,
-      "hitRatePercent": 100,
-      "averageCloseReturnPercent": 6.95,
-      "averageMaxFavorablePercent": 4.33,
-      "averageMaxAdversePercent": -5.04
+      "averageCloseReturnPercent": 5.17,
+      "averageMaxFavorablePercent": 8.23,
+      "averageMaxAdversePercent": -15.95
     },
     {
       "asset": "ARB",
-      "interval": "4h",
-      "signalType": "strong-buy",
-      "signalCount": 1,
-      "hitCount": 1,
-      "hitRatePercent": 100,
-      "averageCloseReturnPercent": 1.67,
-      "averageMaxFavorablePercent": 3.72,
-      "averageMaxAdversePercent": -2.99
-    },
-    {
-      "asset": "ARB",
-      "interval": "4h",
+      "interval": "1d",
       "signalType": "strong-sell",
       "signalCount": 1,
       "hitCount": 1,
       "hitRatePercent": 100,
-      "averageCloseReturnPercent": 6.95,
-      "averageMaxFavorablePercent": 4.33,
-      "averageMaxAdversePercent": -5.04
+      "averageCloseReturnPercent": 10.01,
+      "averageMaxFavorablePercent": 15.64,
+      "averageMaxAdversePercent": -13.79
     },
     {
       "asset": "XRP",
-      "interval": "4h",
-      "signalType": "strong-buy",
-      "signalCount": 1,
-      "hitCount": 1,
-      "hitRatePercent": 100,
-      "averageCloseReturnPercent": 1.67,
-      "averageMaxFavorablePercent": 3.72,
-      "averageMaxAdversePercent": -2.99
-    },
-    {
-      "asset": "XRP",
-      "interval": "4h",
+      "interval": "1d",
       "signalType": "strong-sell",
-      "signalCount": 1,
+      "signalCount": 2,
       "hitCount": 1,
-      "hitRatePercent": 100,
-      "averageCloseReturnPercent": 6.95,
-      "averageMaxFavorablePercent": 4.33,
-      "averageMaxAdversePercent": -5.04
+      "hitRatePercent": 50,
+      "averageCloseReturnPercent": 69.74,
+      "averageMaxFavorablePercent": 2.48,
+      "averageMaxAdversePercent": -94.32
     }
   ],
   "dataLimitations": [
     "missing indicators are explicitly excluded and available weights are normalized; full-data and limited-data results must be compared separately.",
     "public no-key data can have delayed archive files; reports include data start/end and excluded signal counts.",
-    "Fear & Greed is daily and is forward-filled for 4h candles by UTC date."
+    "Fear & Greed is daily and is forward-filled for 4h candles by UTC date.",
+    "Historical open interest is unavailable in the public no-key backtest path, so futures positioning uses funding only (10 available points) and the available indicator weights are normalized to 100."
   ],
-  "source": "deterministic fixture",
+  "source": "Binance public no-key + Alternative.me public no-key",
   "reports": [
     {
       "asset": "BTC",
       "interval": "4h",
-      "dataStart": "2023-11-14T22:13:20.000Z",
-      "dataEnd": "2023-11-29T18:13:20.000Z",
-      "signalCount": 2,
+      "dataStart": "2025-08-13T00:00:00.000Z",
+      "dataEnd": "2026-08-12T20:00:00.000Z",
+      "candleCount": 2190,
+      "evaluatedSignals": 2,
+      "excludedSignals": 0,
+      "horizon": "24h",
+      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
+    },
+    {
+      "asset": "ETH",
+      "interval": "4h",
+      "dataStart": "2025-08-13T00:00:00.000Z",
+      "dataEnd": "2026-08-12T20:00:00.000Z",
+      "candleCount": 2190,
+      "evaluatedSignals": 2,
+      "excludedSignals": 0,
+      "horizon": "24h",
+      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
+    },
+    {
+      "asset": "SHIB",
+      "interval": "4h",
+      "dataStart": "2025-08-13T00:00:00.000Z",
+      "dataEnd": "2026-08-12T20:00:00.000Z",
+      "candleCount": 2190,
+      "evaluatedSignals": 8,
+      "excludedSignals": 0,
+      "horizon": "24h",
+      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
+    },
+    {
+      "asset": "FIL",
+      "interval": "4h",
+      "dataStart": "2025-08-13T00:00:00.000Z",
+      "dataEnd": "2026-08-12T20:00:00.000Z",
+      "candleCount": 2190,
+      "evaluatedSignals": 0,
+      "excludedSignals": 0,
+      "horizon": "24h",
+      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
+    },
+    {
+      "asset": "STX",
+      "interval": "4h",
+      "dataStart": "2025-08-13T00:00:00.000Z",
+      "dataEnd": "2026-08-12T20:00:00.000Z",
+      "candleCount": 2190,
+      "evaluatedSignals": 1,
+      "excludedSignals": 0,
+      "horizon": "24h",
+      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
+    },
+    {
+      "asset": "DOGE",
+      "interval": "4h",
+      "dataStart": "2025-08-13T00:00:00.000Z",
+      "dataEnd": "2026-08-12T20:00:00.000Z",
+      "candleCount": 2190,
+      "evaluatedSignals": 0,
+      "excludedSignals": 0,
+      "horizon": "24h",
+      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
+    },
+    {
+      "asset": "ARB",
+      "interval": "4h",
+      "dataStart": "2025-08-13T00:00:00.000Z",
+      "dataEnd": "2026-08-12T20:00:00.000Z",
+      "candleCount": 2190,
+      "evaluatedSignals": 0,
+      "excludedSignals": 0,
+      "horizon": "24h",
+      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
+    },
+    {
+      "asset": "XRP",
+      "interval": "4h",
+      "dataStart": "2025-08-13T00:00:00.000Z",
+      "dataEnd": "2026-08-12T20:00:00.000Z",
+      "candleCount": 2190,
+      "evaluatedSignals": 0,
       "excludedSignals": 0,
       "horizon": "24h",
       "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
@@ -198,152 +222,113 @@
     {
       "asset": "BTC",
       "interval": "1d",
-      "dataStart": "2023-11-14T22:13:20.000Z",
-      "dataEnd": "2023-11-29T18:13:20.000Z",
-      "signalCount": 0,
-      "excludedSignals": 2,
+      "dataStart": "2024-08-13T00:00:00.000Z",
+      "dataEnd": "2026-08-12T00:00:00.000Z",
+      "candleCount": 730,
+      "evaluatedSignals": 2,
+      "excludedSignals": 0,
       "horizon": "7d",
       "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
     },
     {
       "asset": "ETH",
-      "interval": "4h",
-      "dataStart": "2023-11-14T22:13:20.000Z",
-      "dataEnd": "2023-11-29T18:13:20.000Z",
-      "signalCount": 2,
-      "excludedSignals": 0,
-      "horizon": "24h",
-      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
-    },
-    {
-      "asset": "ETH",
       "interval": "1d",
-      "dataStart": "2023-11-14T22:13:20.000Z",
-      "dataEnd": "2023-11-29T18:13:20.000Z",
-      "signalCount": 0,
-      "excludedSignals": 2,
+      "dataStart": "2024-08-13T00:00:00.000Z",
+      "dataEnd": "2026-08-12T00:00:00.000Z",
+      "candleCount": 730,
+      "evaluatedSignals": 1,
+      "excludedSignals": 0,
       "horizon": "7d",
       "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
     },
     {
       "asset": "SHIB",
-      "interval": "4h",
-      "dataStart": "2023-11-14T22:13:20.000Z",
-      "dataEnd": "2023-11-29T18:13:20.000Z",
-      "signalCount": 2,
-      "excludedSignals": 0,
-      "horizon": "24h",
-      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
-    },
-    {
-      "asset": "SHIB",
       "interval": "1d",
-      "dataStart": "2023-11-14T22:13:20.000Z",
-      "dataEnd": "2023-11-29T18:13:20.000Z",
-      "signalCount": 0,
-      "excludedSignals": 2,
+      "dataStart": "2024-08-13T00:00:00.000Z",
+      "dataEnd": "2026-08-12T00:00:00.000Z",
+      "candleCount": 730,
+      "evaluatedSignals": 2,
+      "excludedSignals": 0,
       "horizon": "7d",
       "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
     },
     {
       "asset": "FIL",
-      "interval": "4h",
-      "dataStart": "2023-11-14T22:13:20.000Z",
-      "dataEnd": "2023-11-29T18:13:20.000Z",
-      "signalCount": 2,
-      "excludedSignals": 0,
-      "horizon": "24h",
-      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
-    },
-    {
-      "asset": "FIL",
       "interval": "1d",
-      "dataStart": "2023-11-14T22:13:20.000Z",
-      "dataEnd": "2023-11-29T18:13:20.000Z",
-      "signalCount": 0,
-      "excludedSignals": 2,
+      "dataStart": "2024-08-13T00:00:00.000Z",
+      "dataEnd": "2026-08-12T00:00:00.000Z",
+      "candleCount": 730,
+      "evaluatedSignals": 2,
+      "excludedSignals": 0,
       "horizon": "7d",
       "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
     },
     {
       "asset": "STX",
-      "interval": "4h",
-      "dataStart": "2023-11-14T22:13:20.000Z",
-      "dataEnd": "2023-11-29T18:13:20.000Z",
-      "signalCount": 2,
-      "excludedSignals": 0,
-      "horizon": "24h",
-      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
-    },
-    {
-      "asset": "STX",
       "interval": "1d",
-      "dataStart": "2023-11-14T22:13:20.000Z",
-      "dataEnd": "2023-11-29T18:13:20.000Z",
-      "signalCount": 0,
-      "excludedSignals": 2,
+      "dataStart": "2024-08-13T00:00:00.000Z",
+      "dataEnd": "2026-08-12T00:00:00.000Z",
+      "candleCount": 730,
+      "evaluatedSignals": 3,
+      "excludedSignals": 0,
       "horizon": "7d",
       "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
     },
     {
       "asset": "DOGE",
-      "interval": "4h",
-      "dataStart": "2023-11-14T22:13:20.000Z",
-      "dataEnd": "2023-11-29T18:13:20.000Z",
-      "signalCount": 2,
-      "excludedSignals": 0,
-      "horizon": "24h",
-      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
-    },
-    {
-      "asset": "DOGE",
       "interval": "1d",
-      "dataStart": "2023-11-14T22:13:20.000Z",
-      "dataEnd": "2023-11-29T18:13:20.000Z",
-      "signalCount": 0,
-      "excludedSignals": 2,
+      "dataStart": "2024-08-13T00:00:00.000Z",
+      "dataEnd": "2026-08-12T00:00:00.000Z",
+      "candleCount": 730,
+      "evaluatedSignals": 0,
+      "excludedSignals": 0,
       "horizon": "7d",
       "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
     },
     {
       "asset": "ARB",
-      "interval": "4h",
-      "dataStart": "2023-11-14T22:13:20.000Z",
-      "dataEnd": "2023-11-29T18:13:20.000Z",
-      "signalCount": 2,
-      "excludedSignals": 0,
-      "horizon": "24h",
-      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
-    },
-    {
-      "asset": "ARB",
       "interval": "1d",
-      "dataStart": "2023-11-14T22:13:20.000Z",
-      "dataEnd": "2023-11-29T18:13:20.000Z",
-      "signalCount": 0,
-      "excludedSignals": 2,
+      "dataStart": "2024-08-13T00:00:00.000Z",
+      "dataEnd": "2026-08-12T00:00:00.000Z",
+      "candleCount": 730,
+      "evaluatedSignals": 1,
+      "excludedSignals": 0,
       "horizon": "7d",
       "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
     },
     {
       "asset": "XRP",
-      "interval": "4h",
-      "dataStart": "2023-11-14T22:13:20.000Z",
-      "dataEnd": "2023-11-29T18:13:20.000Z",
-      "signalCount": 2,
-      "excludedSignals": 0,
-      "horizon": "24h",
-      "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
-    },
-    {
-      "asset": "XRP",
       "interval": "1d",
-      "dataStart": "2023-11-14T22:13:20.000Z",
-      "dataEnd": "2023-11-29T18:13:20.000Z",
-      "signalCount": 0,
-      "excludedSignals": 2,
+      "dataStart": "2024-08-13T00:00:00.000Z",
+      "dataEnd": "2026-08-12T00:00:00.000Z",
+      "candleCount": 730,
+      "evaluatedSignals": 2,
+      "excludedSignals": 0,
       "horizon": "7d",
       "lookAheadRule": "Score is calculated after a candle closes; entry uses the next candle open, only fully observed forward horizons are evaluated, and the candle starting at the horizon boundary is excluded."
+    }
+  ],
+  "audit": [
+    {
+      "asset": "BTC",
+      "interval": "4h",
+      "strongBuyStateBars": 2,
+      "strongSellStateBars": 0,
+      "newEntries": 2,
+      "evaluatedSignals": 2,
+      "excludedSignals": 0,
+      "signalTimestamps": [
+        {
+          "type": "strong-buy",
+          "signalOpenTime": "2026-03-03T08:00:00.000Z",
+          "entryOpenTime": "2026-03-03T12:00:00.000Z"
+        },
+        {
+          "type": "strong-buy",
+          "signalOpenTime": "2026-07-20T04:00:00.000Z",
+          "entryOpenTime": "2026-07-20T08:00:00.000Z"
+        }
+      ]
     }
   ]
 }
