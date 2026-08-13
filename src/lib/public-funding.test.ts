@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
+import packageJson from '../../package.json';
 import { fetchPublicFundingHistory } from '@/lib/public-funding';
 
 describe('public historical funding data', () => {
+  it('validates a separately published snapshot during host builds without calling market APIs', () => {
+    expect(packageJson.scripts.build).toBe('npm run backtest:validate && next build');
+  });
+
   it('uses the public Bybit endpoint so a Binance HTTP 451 cannot break the production build', async () => {
     const request = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);

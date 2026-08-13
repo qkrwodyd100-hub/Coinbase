@@ -10,7 +10,7 @@ BTC/ETH market signal dashboard based on RSI, Fear & Greed, moving averages, and
 
 All external calls are proxied through `GET /api/signals`, validated before scoring, cached with `s-maxage=55`, and returned as a compact dashboard payload. The client refreshes on load, manually via the Refresh button, and automatically every 60 seconds.
 
-Production backtests are regenerated during `npm run build` from public, no-key sources: Binance spot candles, Bybit linear funding history (`GET /v5/market/funding/history`), and Alternative.me Fear & Greed history. The build fails instead of publishing fixture, stale, malformed, or incomplete 8-asset × 2-interval data.
+Production backtests are regenerated with `npm run backtest` from public, no-key sources: Binance spot candles, Bybit linear funding history (`GET /v5/market/funding/history`), and Alternative.me Fear & Greed history. The verified snapshot is committed before deployment; `npm run build` validates freshness, provenance, and complete 8-asset × 2-interval coverage without making region-sensitive market calls. Both commands fail instead of publishing fixture, stale, malformed, or incomplete data.
 
 ## Moving-average mixed-case scoring
 

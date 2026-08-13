@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "npm run backtest && next build",
+    "build": "npm run backtest:validate && next build",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
@@ -13,6 +13,7 @@
     "test:watch": "vitest --coverage=false",
     "test:e2e": "playwright test",
     "backtest": "node --experimental-strip-types scripts/generate-backtest-report.ts",
+    "backtest:validate": "node --experimental-strip-types scripts/validate-backtest-report.ts",
     "backtest:fixture": "node --experimental-strip-types scripts/generate-backtest-report.ts --fixture",
     "backtest:smoke": "node --experimental-strip-types scripts/generate-backtest-report.ts --smoke"
   },
