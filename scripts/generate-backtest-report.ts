@@ -5,14 +5,10 @@ import { deriveBtcRelativeCandles } from '../src/lib/btc-relative.ts';
 import { closedCandleBoundary, runBacktest, summarizeBacktest } from '../src/lib/backtest.ts';
 import { scoreBacktestCandles } from '../src/lib/backtest-scoring.ts';
 import { assertProductionBacktestSummary } from '../src/lib/backtest-summary.ts';
+import { fetchPublicFundingHistory } from '../src/lib/public-funding.ts';
 
 type Asset = AssetSymbol;
 type Interval = '4h' | '1d';
-
-type FundingRow = {
-  fundingTime: number;
-  fundingRatePercent: number;
-};
 
 type FearGreedRow = {
   date: string;
@@ -20,7 +16,6 @@ type FearGreedRow = {
 };
 
 const DATA_API = 'https://data-api.binance.vision/api/v3/klines';
-const FUNDING_API = 'https://fapi.binance.com/fapi/v1/fundingRate';
 const FNG_API = 'https://api.alternative.me/fng/?limit=0&format=json';
 const LOOKBACKS: Record<Interval, number> = { '4h': 365, '1d': 730 };
 const HORIZONS: Record<Interval, number> = { '4h': 24 * 60 * 60 * 1000, '1d': 7 * 24 * 60 * 60 * 1000 };
@@ -44,7 +39,7 @@ const payload = {
           'Historical open interest is unavailable in the public no-key backtest path, so futures positioning uses funding only (10 available points) and the available indicator weights are normalized to 100.',
         ]
       : summary.dataLimitations,
-  source: mode === 'fixture' ? 'deterministic fixture' : 'Binance public no-key + Alternative.me public no-key',
+  source: mode === 'fixture' ? 'deterministic fixture' : 'Binance public spot no-key + Bybit public funding no-key + Alternative.me public no-key',
   reports: reports.map(({ result, dataStart, dataEnd, candleCount }) => ({
     asset: result.asset,
     interval: result.interval,
@@ -90,7 +85,7 @@ async function publicResults(smokeOnly: boolean) {
       const symbol = `${asset}USDT`;
       const [candles, funding, altBtc] = await Promise.all([
         fetchKlines(symbol, interval, start, end),
-        fetchFunding(symbol, start, end),
+        fetchPublicFundingHistory(symbol, start, end),
         fetchAltBtcKlines(asset, interval, start, end),
       ]);
       const scoredCandles = scoreBacktestCandles({
@@ -153,24 +148,6 @@ async function fetchKlines(symbol: string, interval: Interval, startTime: number
     if (smoke) break;
   }
   return rows.filter((row) => row.openTime < endTime);
-}
-
-async function fetchFunding(symbol: string, startTime: number, endTime: number): Promise<FundingRow[]> {
-  const rows: FundingRow[] = [];
-  let cursor = startTime;
-  while (cursor < endTime) {
-    const payload = await fetchJson(`${FUNDING_API}?symbol=${symbol}&startTime=${cursor}&endTime=${endTime}&limit=1000`);
-    if (!Array.isArray(payload) || payload.length === 0) break;
-    for (const row of payload) {
-      if (!isRecord(row)) continue;
-      rows.push({ fundingTime: parseNumber(row.fundingTime, `${symbol} fundingTime`), fundingRatePercent: parseNumber(row.fundingRate, `${symbol} fundingRate`) * 100 });
-    }
-    const next = (rows.at(-1)?.fundingTime ?? cursor) + 1;
-    if (next <= cursor) break;
-    cursor = next;
-    if (smoke) break;
-  }
-  return rows;
 }
 
 async function fetchFearGreed(): Promise<FearGreedRow[]> {
