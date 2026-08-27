@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-13T01:56:58.457Z",
+  "generatedAt": "2026-08-27T01:13:39.705Z",
   "rows": [
     {
       "asset": "BTC",
@@ -112,8 +112,8 @@
     {
       "asset": "BTC",
       "interval": "4h",
-      "dataStart": "2025-08-13T00:00:00.000Z",
-      "dataEnd": "2026-08-12T20:00:00.000Z",
+      "dataStart": "2025-08-27T00:00:00.000Z",
+      "dataEnd": "2026-08-26T20:00:00.000Z",
       "candleCount": 2190,
       "evaluatedSignals": 2,
       "excludedSignals": 0,
@@ -123,8 +123,8 @@
     {
       "asset": "ETH",
       "interval": "4h",
-      "dataStart": "2025-08-13T00:00:00.000Z",
-      "dataEnd": "2026-08-12T20:00:00.000Z",
+      "dataStart": "2025-08-27T00:00:00.000Z",
+      "dataEnd": "2026-08-26T20:00:00.000Z",
       "candleCount": 2190,
       "evaluatedSignals": 2,
       "excludedSignals": 0,
@@ -134,8 +134,8 @@
     {
       "asset": "SHIB",
       "interval": "4h",
-      "dataStart": "2025-08-13T00:00:00.000Z",
-      "dataEnd": "2026-08-12T20:00:00.000Z",
+      "dataStart": "2025-08-27T00:00:00.000Z",
+      "dataEnd": "2026-08-26T20:00:00.000Z",
       "candleCount": 2190,
       "evaluatedSignals": 0,
       "excludedSignals": 0,
@@ -145,8 +145,8 @@
     {
       "asset": "FIL",
       "interval": "4h",
-      "dataStart": "2025-08-13T00:00:00.000Z",
-      "dataEnd": "2026-08-12T20:00:00.000Z",
+      "dataStart": "2025-08-27T00:00:00.000Z",
+      "dataEnd": "2026-08-26T20:00:00.000Z",
       "candleCount": 2190,
       "evaluatedSignals": 0,
       "excludedSignals": 0,
@@ -156,8 +156,8 @@
     {
       "asset": "STX",
       "interval": "4h",
-      "dataStart": "2025-08-13T00:00:00.000Z",
-      "dataEnd": "2026-08-12T20:00:00.000Z",
+      "dataStart": "2025-08-27T00:00:00.000Z",
+      "dataEnd": "2026-08-26T20:00:00.000Z",
       "candleCount": 2190,
       "evaluatedSignals": 1,
       "excludedSignals": 0,
@@ -167,8 +167,8 @@
     {
       "asset": "DOGE",
       "interval": "4h",
-      "dataStart": "2025-08-13T00:00:00.000Z",
-      "dataEnd": "2026-08-12T20:00:00.000Z",
+      "dataStart": "2025-08-27T00:00:00.000Z",
+      "dataEnd": "2026-08-26T20:00:00.000Z",
       "candleCount": 2190,
       "evaluatedSignals": 0,
       "excludedSignals": 0,
@@ -178,8 +178,8 @@
     {
       "asset": "ARB",
       "interval": "4h",
-      "dataStart": "2025-08-13T00:00:00.000Z",
-      "dataEnd": "2026-08-12T20:00:00.000Z",
+      "dataStart": "2025-08-27T00:00:00.000Z",
+      "dataEnd": "2026-08-26T20:00:00.000Z",
       "candleCount": 2190,
       "evaluatedSignals": 0,
       "excludedSignals": 0,
@@ -189,8 +189,8 @@
     {
       "asset": "XRP",
       "interval": "4h",
-      "dataStart": "2025-08-13T00:00:00.000Z",
-      "dataEnd": "2026-08-12T20:00:00.000Z",
+      "dataStart": "2025-08-27T00:00:00.000Z",
+      "dataEnd": "2026-08-26T20:00:00.000Z",
       "candleCount": 2190,
       "evaluatedSignals": 0,
       "excludedSignals": 0,
@@ -200,8 +200,8 @@
     {
       "asset": "BTC",
       "interval": "1d",
-      "dataStart": "2024-08-13T00:00:00.000Z",
-      "dataEnd": "2026-08-12T00:00:00.000Z",
+      "dataStart": "2024-08-27T00:00:00.000Z",
+      "dataEnd": "2026-08-26T00:00:00.000Z",
       "candleCount": 730,
       "evaluatedSignals": 3,
       "excludedSignals": 0,
@@ -211,8 +211,8 @@
     {
       "asset": "ETH",
       "interval": "1d",
-      "dataStart": "2024-08-13T00:00:00.000Z",
-      "dataEnd": "2026-08-12T00:00:00.000Z",
+      "dataStart": "2024-08-27T00:00:00.000Z",
+      "dataEnd": "2026-08-26T00:00:00.000Z",
       "candleCount": 730,
       "evaluatedSignals": 1,
       "excludedSignals": 0,
@@ -222,8 +222,8 @@
     {
       "asset": "SHIB",
       "interval": "1d",
-      "dataStart": "2024-08-13T00:00:00.000Z",
-      "dataEnd": "2026-08-12T00:00:00.000Z",
+      "dataStart": "2024-08-27T00:00:00.000Z",
+      "dataEnd": "2026-08-26T00:00:00.000Z",
       "candleCount": 730,
       "evaluatedSignals": 0,
       "excludedSignals": 0,
@@ -233,8 +233,8 @@
     {
       "asset": "FIL",
       "interval": "1d",
-      "dataStart": "2024-08-13T00:00:00.000Z",
-      "dataEnd": "2026-08-12T00:00:00.000Z",
+      "dataStart": "2024-08-27T00:00:00.000Z",
+      "dataEnd": "2026-08-26T00:00:00.000Z",
       "candleCount": 730,
       "evaluatedSignals": 2,
       "excludedSignals": 0,
@@ -244,8 +244,8 @@
     {
       "asset": "STX",
       "interval": "1d",
-      "dataStart": "2024-08-13T00:00:00.000Z",
-      "dataEnd": "2026-08-12T00:00:00.000Z",
+      "dataStart": "2024-08-27T00:00:00.000Z",
+      "dataEnd": "2026-08-26T00:00:00.000Z",
       "candleCount": 730,
       "evaluatedSignals": 2,
       "excludedSignals": 0,
@@ -255,8 +255,8 @@
     {
       "asset": "DOGE",
       "interval": "1d",
-      "dataStart": "2024-08-13T00:00:00.000Z",
-      "dataEnd": "2026-08-12T00:00:00.000Z",
+      "dataStart": "2024-08-27T00:00:00.000Z",
+      "dataEnd": "2026-08-26T00:00:00.000Z",
       "candleCount": 730,
       "evaluatedSignals": 0,
       "excludedSignals": 0,
@@ -266,8 +266,8 @@
     {
       "asset": "ARB",
       "interval": "1d",
-      "dataStart": "2024-08-13T00:00:00.000Z",
-      "dataEnd": "2026-08-12T00:00:00.000Z",
+      "dataStart": "2024-08-27T00:00:00.000Z",
+      "dataEnd": "2026-08-26T00:00:00.000Z",
       "candleCount": 730,
       "evaluatedSignals": 1,
       "excludedSignals": 0,
@@ -277,8 +277,8 @@
     {
       "asset": "XRP",
       "interval": "1d",
-      "dataStart": "2024-08-13T00:00:00.000Z",
-      "dataEnd": "2026-08-12T00:00:00.000Z",
+      "dataStart": "2024-08-27T00:00:00.000Z",
+      "dataEnd": "2026-08-26T00:00:00.000Z",
       "candleCount": 730,
       "evaluatedSignals": 1,
       "excludedSignals": 0,

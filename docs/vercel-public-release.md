@@ -9,6 +9,29 @@
 - 따라서 현재 Vercel에서 새 환경변수를 입력할 필요가 없습니다.
 - `.env.example`에는 의도적으로 환경변수 할당이나 실제 값, placeholder가 없습니다. 향후 환경변수가 필요해질 때까지 주석만 있는 상태가 올바릅니다.
 
+## Canonical URL, build identity, legacy alias
+
+- Canonical production URL은 `https://coinbase-ivory.vercel.app`입니다. 운영 링크와 검증은 이 주소를 기준으로 합니다.
+- `https://crypto-signal-dashboard-chi.vercel.app`은 별도 운영 면이 아닙니다. host 기반 permanent redirect가 canonical의 같은 path로 보냅니다.
+- `GET /api/version`은 비밀값이 아닌 전체 Git commit SHA, `signals-v1` data contract, canonical URL을 JSON으로 공개합니다. Vercel Git deployment가 제공하는 `VERCEL_GIT_COMMIT_SHA`를 사용하며, 값이 없으면 `unavailable`로 fail-visible합니다.
+- GitHub의 Vercel deployment status에서 production deployment URL과 commit SHA를 확인하고, `/api/version`의 SHA가 그 commit과 같은지 대조합니다. 토큰이나 환경변수 값은 기록하지 않습니다.
+
+배포 후 두 alias가 하나의 선언된 build와 API contract로 수렴하는지 다음 명령으로 확인합니다.
+
+```bash
+npm run smoke:deployment
+```
+
+이 smoke는 legacy alias의 redirect status/location, 두 URL의 최종 `/api/version` 응답, 전체 40자리 Git SHA, `signals-v1`, `/api/signals`의 8개 자산 순서를 함께 검증합니다.
+
+### Alias 변경 롤백
+
+1. GitHub/Vercel에서 직전 정상 production deployment의 Git SHA와 deployment URL을 기록합니다.
+2. redirect 또는 version endpoint에 결함이 있으면 변경 commit을 `git revert <sha>`로 되돌려 `main`에 push합니다. history를 rewrite하지 않습니다.
+3. 긴급한 alias-only 롤백은 Vercel Dashboard의 해당 프로젝트 **Deployments**에서 직전 정상 deployment를 Promote/Redeploy한 뒤 canonical `/api/version`과 `/api/signals`를 확인합니다.
+4. `crypto-signal-dashboard-chi.vercel.app`을 다시 독립 서비스로 운영하지 않습니다. redirect를 일시 제거해야 한다면 두 host가 같은 production deployment SHA를 선언하도록 먼저 명시적으로 alias를 재지정합니다.
+5. 롤백 후 `npm run smoke:deployment`를 다시 실행하고 canonical root/API HTTP 200, legacy redirect, 동일 commit/data contract를 확인합니다.
+
 ## `public` Output Directory 오류의 원인과 저장소 설정
 
 이 저장소는 루트 `package.json`의 `build` script로 `next build`를 실행하는 Next.js 애플리케이션이며, 로컬 빌드 산출물은 `.next/`입니다. 정적 사이트용 `public/` 산출물을 만드는 script도, 추적된 `public/` 디렉터리도 없습니다. 따라서 다음 오류는 저장소 build가 `public/` 생성을 빠뜨렸다는 뜻이 아니라 Vercel 프로젝트의 **Output Directory override가 `public`으로 남아 있었다는 증거**입니다.

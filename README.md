@@ -34,4 +34,4 @@ npm run test:e2e
 
 ## Vercel 공개 배포
 
-공개 저장소 전환, Git integration 배포 복구, 환경변수 운영 절차는 [docs/vercel-public-release.md](docs/vercel-public-release.md)를 참고하세요. 현재 애플리케이션은 환경변수를 요구하지 않습니다.
+Canonical production URL은 [https://coinbase-ivory.vercel.app](https://coinbase-ivory.vercel.app)입니다. 공개 저장소 전환, Git integration 배포 복구, alias, build SHA, 환경변수 운영 절차는 [docs/vercel-public-release.md](docs/vercel-public-release.md)를 참고하세요. 현재 애플리케이션은 환경변수를 요구하지 않습니다.
