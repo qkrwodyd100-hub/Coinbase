@@ -5,6 +5,7 @@ export type BacktestSignalType = 'strong-buy' | 'strong-sell';
 export type ScoredCandle = {
   candle: MarketCandle;
   score: number;
+  extremeEligible?: boolean;
 };
 
 export type BacktestSignal = {
@@ -46,7 +47,7 @@ export function runBacktest(input: { asset: AssetSymbol; interval: '4h' | '1d'; 
 
   for (let index = 0; index < input.scoredCandles.length; index += 1) {
     const current = input.scoredCandles[index];
-    const type = signalTypeForScore(current.score);
+    const type = current.extremeEligible === false ? null : signalTypeForScore(current.score);
     if (type === null) {
       previousType = null;
       continue;
@@ -121,7 +122,7 @@ export function summarizeBacktest(results: BacktestResult[]): BacktestSummary {
     generatedAt: new Date().toISOString(),
     rows,
     dataLimitations: [
-      'missing indicators are explicitly excluded and available weights are normalized; full-data and limited-data results must be compared separately.',
+      'missing or stale indicators are explicitly excluded; extreme events fail closed unless the snapshot has fresh 100% coverage.',
       'public no-key data can have delayed archive files; reports include data start/end and excluded signal counts.',
       'Fear & Greed is daily and is forward-filled for 4h candles by UTC date.',
     ],

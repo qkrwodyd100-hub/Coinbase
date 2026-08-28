@@ -13,12 +13,30 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+const closedSignalContract = {
+  signalTimeframe: '1d' as const,
+  signalBarOpen: '2026-08-04T00:00:00.000Z',
+  signalBarClose: '2026-08-05T00:00:00.000Z',
+  availableWeight: 100,
+  coverageRegime: 'full' as const,
+  extremeEligible: true,
+  extremeCoverageFloor: 100,
+  features: [
+    { id: 'moving-averages' as const, source: 'binance-spot-klines', timeframe: '1d' as const, observedAt: '2026-08-05T00:00:00.000Z', availableAt: '2026-08-05T00:00:00.000Z', maxAgeMs: 300_000, status: 'available' as const },
+    { id: 'funding' as const, source: 'binance-usdm-funding', timeframe: '8h' as const, observedAt: '2026-08-04T16:00:00.000Z', availableAt: '2026-08-04T16:00:00.000Z', maxAgeMs: 43_200_000, status: 'available' as const },
+  ],
+};
+
 const okPayload = {
   asOf: '2026-08-05T00:00:00.000Z',
+  signalTimeframe: '1d' as const,
+  signalBarClose: '2026-08-05T00:00:00.000Z',
+  nextExecutableAt: '2026-08-05T00:00:00.000Z',
   usdKrwRate: 1370,
   fxUnavailable: false,
   assets: [
     {
+      ...closedSignalContract,
       symbol: 'BTC',
       name: '비트코인',
       price: 65000,
@@ -40,6 +58,7 @@ const okPayload = {
       ],
     },
     {
+      ...closedSignalContract,
       symbol: 'ETH',
       name: '이더리움',
       price: 3200,
@@ -124,8 +143,15 @@ describe('dashboard behavior', () => {
     const tablist = await screen.findByRole('tablist', { name: '자산 탭 목록' });
     expect(within(tablist).getAllByRole('tab')).toHaveLength(8);
     expect(tablist).toHaveClass('overflow-x-auto');
-    await userEvent.click(within(tablist).getByRole('tab', { name: /shib.*SHIB 코인/i }));
-    expect(screen.getByRole('heading', { name: 'SHIB 코인 시그널' })).toBeInTheDocument();
+    for (const asset of allAssets) {
+      await userEvent.click(within(tablist).getByRole('tab', { name: new RegExp(`${asset.symbol}.*${asset.name}`, 'i') }));
+      expect(screen.getByRole('heading', { name: `${asset.name} 시그널` })).toBeInTheDocument();
+      expect(screen.getByRole('meter', { name: new RegExp(`${asset.name} 시그널 점수`, 'i') })).toHaveAttribute('aria-valuenow', String(asset.overallScore));
+      const contract = screen.getByRole('region', { name: `${asset.symbol} 시그널 데이터 계약` });
+      expect(contract).toHaveTextContent('1d 닫힌 봉');
+      expect(contract).toHaveTextContent('2026-08-05T00:00:00.000Z');
+      expect(contract).toHaveTextContent('full · 100/100');
+    }
     expect(screen.getByRole('button', { name: /ALT\/BTC 상대강도.*상세 설명 열기/i })).toBeInTheDocument();
   });
 
@@ -187,7 +213,7 @@ describe('dashboard behavior', () => {
     render(createElement(Home));
 
     expect(await screen.findByText('선물 펀딩비와 미체결약정 데이터를 가져오지 못했습니다.')).toBeInTheDocument();
-    expect(screen.getByText('누락 지표는 0점이나 만점으로 처리하지 않고, 사용 가능한 지표만 100점 기준으로 정규화했습니다.')).toBeInTheDocument();
+    expect(screen.getByText('진단 점수는 사용 가능한 지표를 정규화하지만, coverage가 100%가 아니므로 강력 판정과 이벤트는 차단됩니다.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /선물 펀딩비·미체결약정.*상세 설명 열기/i })).not.toBeInTheDocument();
   });
 

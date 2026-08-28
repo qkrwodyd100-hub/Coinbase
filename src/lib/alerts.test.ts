@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AssetSignal, AssetSymbol } from '@/lib/signals';
+import type { AssetSignal, AssetSymbol, CoverageRegime } from '@/lib/signals';
 import {
   ALERT_COOLDOWN_MS,
   buildExtremeSignalAlertMessage,
@@ -17,7 +17,7 @@ const baseIndicators: AssetSignal['indicators'] = [
   { id: 'fear-greed', title: '공포·탐욕 지수', value: '22', score: 15, maxScore: 15, interpretation: '극단적 공포 구간은 역발상 가산점을 최대로 반영합니다.' },
 ];
 
-function asset(symbol: AssetSymbol, score: number, indicators = baseIndicators): AssetSignal {
+function asset(symbol: AssetSymbol, score: number, indicators = baseIndicators, coverageRegime: CoverageRegime = 'full'): AssetSignal {
   return {
     symbol,
     name: symbol === 'BTC' ? '비트코인' : symbol === 'ETH' ? '이더리움' : '시바이누',
@@ -28,6 +28,14 @@ function asset(symbol: AssetSymbol, score: number, indicators = baseIndicators):
     indicators,
     missingFeatures: [],
     scorePolicy: 'available indicator weights are normalized to 100',
+    signalTimeframe: '1d',
+    signalBarOpen: '2026-08-04T00:00:00.000Z',
+    signalBarClose: '2026-08-05T00:00:00.000Z',
+    availableWeight: coverageRegime === 'full' ? 100 : 80,
+    coverageRegime,
+    extremeEligible: coverageRegime === 'full',
+    extremeCoverageFloor: 100,
+    features: [],
   };
 }
 
@@ -74,6 +82,18 @@ describe('extreme signal alert decisions', () => {
 
     expect(stillExtreme.alerts).toEqual([]);
     expect(reentered.alerts).toHaveLength(1);
+  });
+
+  it('re-baselines without an event when a coverage transition alone changes the threshold class', () => {
+    const baseline = evaluateExtremeSignalAlerts({ assets: [asset('BTC', 79)], previousState: {}, now: 1_000 });
+    const limitedCrossing = evaluateExtremeSignalAlerts({ assets: [asset('BTC', 82, baseIndicators, 'limited')], previousState: baseline.nextState, now: 2_000 });
+    const restoredCoverage = evaluateExtremeSignalAlerts({ assets: [asset('BTC', 82)], previousState: limitedCrossing.nextState, now: 3_000 });
+    const exited = evaluateExtremeSignalAlerts({ assets: [asset('BTC', 79)], previousState: restoredCoverage.nextState, now: 4_000 });
+    const marketCrossing = evaluateExtremeSignalAlerts({ assets: [asset('BTC', 80)], previousState: exited.nextState, now: 5_000 });
+
+    expect(limitedCrossing.alerts).toEqual([]);
+    expect(restoredCoverage.alerts).toEqual([]);
+    expect(marketCrossing.alerts).toHaveLength(1);
   });
 
   it.each(['BTC', 'ETH'] as const)('validates %s strong-buy crossing, sustained zone silence, cooldown, and re-entry', (symbol) => {

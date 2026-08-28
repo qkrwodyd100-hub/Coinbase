@@ -1,11 +1,29 @@
 import { expect, type Page, test } from '@playwright/test';
 
+const closedSignalContract = {
+  signalTimeframe: '1d' as const,
+  signalBarOpen: '2026-08-04T00:00:00.000Z',
+  signalBarClose: '2026-08-05T00:00:00.000Z',
+  availableWeight: 100,
+  coverageRegime: 'full' as const,
+  extremeEligible: true,
+  extremeCoverageFloor: 100,
+  features: [
+    { id: 'moving-averages' as const, source: 'binance-spot-klines', timeframe: '1d' as const, observedAt: '2026-08-05T00:00:00.000Z', availableAt: '2026-08-05T00:00:00.000Z', maxAgeMs: 300_000, status: 'available' as const },
+    { id: 'funding' as const, source: 'binance-usdm-funding', timeframe: '8h' as const, observedAt: '2026-08-04T16:00:00.000Z', availableAt: '2026-08-04T16:00:00.000Z', maxAgeMs: 43_200_000, status: 'available' as const },
+  ],
+};
+
 const payload = {
   asOf: '2026-08-05T00:00:00.000Z',
+  signalTimeframe: '1d' as const,
+  signalBarClose: '2026-08-05T00:00:00.000Z',
+  nextExecutableAt: '2026-08-05T00:00:00.000Z',
   usdKrwRate: 1370,
   fxUnavailable: false,
   assets: [
     {
+      ...closedSignalContract,
       symbol: 'BTC',
       name: '비트코인',
       price: 65000,
@@ -27,6 +45,7 @@ const payload = {
       ],
     },
     {
+      ...closedSignalContract,
       symbol: 'ETH',
       name: '이더리움',
       price: 3200,
@@ -168,6 +187,12 @@ test('eight asset tabs remain reachable on mobile without page overflow', async 
     await tablist.getByRole('tab', { name: new RegExp(`${symbol}.*${symbol} 코인`, 'i') }).click();
     await expect(page.getByRole('heading', { name: `${symbol} 코인 시그널` })).toBeVisible();
     await expect(page.getByRole('button', { name: /ALT\/BTC 상대강도.*상세 설명 열기/i })).toBeVisible();
+    const asset = eightAssetPayload.assets.find((item) => item.symbol === symbol)!;
+    await expect(page.getByRole('meter', { name: new RegExp(`${asset.name} 시그널 점수`, 'i') })).toHaveAttribute('aria-valuenow', String(asset.overallScore));
+    const contract = page.getByRole('region', { name: `${symbol} 시그널 데이터 계약` });
+    await expect(contract).toContainText('1d 닫힌 봉');
+    await expect(contract).toContainText('2026-08-05T00:00:00.000Z');
+    await expect(contract).toContainText('full · 100/100');
     await expectNoHorizontalOverflow(page);
   }
 
@@ -387,7 +412,7 @@ test('dashboard surfaces stale API payloads and FX fallback states', async ({ pa
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: /비트코인 시그널/i })).toBeVisible();
-  await expect(page.getByText(/오래된 데이터: 새로고침 실패 후 캐시된 스냅샷/i)).toBeVisible();
+  await expect(page.getByText(/오래된 데이터: 명시된 최대 허용 나이/i)).toBeVisible();
   await assertNoClientErrors();
 
   await page.route('**/api/signals', (route) => route.fulfill({ json: fxUnavailablePayload }));

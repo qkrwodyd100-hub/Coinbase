@@ -1,4 +1,4 @@
-import { ASSET_SYMBOLS, type AssetSignal, type IndicatorId } from '@/lib/signals';
+import { ASSET_SYMBOLS, type AssetSignal, type CoverageRegime, type IndicatorId } from '@/lib/signals';
 
 export const ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
@@ -10,6 +10,8 @@ export type ExtremeSignalAlertState = Partial<
     {
       previousScore: number;
       lastSentAt: Partial<Record<ExtremeSignalAlertType, number>>;
+      coverageRegime?: CoverageRegime;
+      extremeEligible?: boolean;
     }
   >
 >;
@@ -43,7 +45,10 @@ export function evaluateExtremeSignalAlerts({
     const previousAssetState = previousState[asset.symbol];
     const previousScore = previousAssetState?.previousScore;
     const lastSentAt = { ...(previousAssetState?.lastSentAt ?? {}) };
-    const type = alertTypeForCrossing(previousScore, asset.overallScore);
+    const coverageChanged =
+      (previousAssetState?.coverageRegime !== undefined && previousAssetState.coverageRegime !== asset.coverageRegime) ||
+      (previousAssetState?.extremeEligible !== undefined && previousAssetState.extremeEligible !== asset.extremeEligible);
+    const type = asset.extremeEligible && !coverageChanged ? alertTypeForCrossing(previousScore, asset.overallScore) : null;
 
     if (type) {
       const lastSent = lastSentAt[type];
@@ -57,6 +62,8 @@ export function evaluateExtremeSignalAlerts({
     nextState[asset.symbol] = {
       previousScore: asset.overallScore,
       lastSentAt,
+      coverageRegime: asset.coverageRegime,
+      extremeEligible: asset.extremeEligible,
     };
   }
 
@@ -101,7 +108,14 @@ export function parseStoredAlertState(raw: string | null): ExtremeSignalAlertSta
         }
       }
 
-      state[symbol] = { previousScore: assetState.previousScore, lastSentAt };
+      const coverageRegime = assetState.coverageRegime;
+      const extremeEligible = assetState.extremeEligible;
+      state[symbol] = {
+        previousScore: assetState.previousScore,
+        lastSentAt,
+        ...(coverageRegime === 'full' || coverageRegime === 'limited' || coverageRegime === 'insufficient' ? { coverageRegime } : {}),
+        ...(typeof extremeEligible === 'boolean' ? { extremeEligible } : {}),
+      };
     }
 
     return state;

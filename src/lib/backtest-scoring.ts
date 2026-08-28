@@ -10,6 +10,11 @@ export type HistoricalFearGreedRow = {
   value: number;
 };
 
+export type HistoricalOpenInterestRow = {
+  timestamp: number;
+  openInterest: number;
+};
+
 export type HistoricalScoredCandle = {
   candle: MarketCandle;
   score: number;
@@ -21,6 +26,8 @@ export function scoreBacktestCandles({
   candles,
   fearGreed,
   funding,
+  openInterest = [],
+  timeframe = '4h',
   ethBtcCandles = [],
   altBtcCandles = [],
 }: {
@@ -28,29 +35,38 @@ export function scoreBacktestCandles({
   candles: MarketCandle[];
   fearGreed: HistoricalFearGreedRow[];
   funding: HistoricalFundingRow[];
+  openInterest?: HistoricalOpenInterestRow[];
+  timeframe?: '4h' | '1d';
   ethBtcCandles?: MarketCandle[];
   altBtcCandles?: MarketCandle[];
 }): HistoricalScoredCandle[] {
   const scored: HistoricalScoredCandle[] = [];
+  const intervalMs = timeframe === '1d' ? 24 * 60 * 60 * 1000 : 4 * 60 * 60 * 1000;
 
   for (let index = 50; index < candles.length; index += 1) {
     const candle = candles[index];
     const history = candles.slice(0, index + 1);
-    const ethHistory = ethBtcCandles.filter((item) => item.openTime <= candle.openTime);
-    const altHistory = altBtcCandles.filter((item) => item.openTime <= candle.openTime);
+    const signalBarClose = candle.openTime + intervalMs;
+    const ethHistory = ethBtcCandles.filter((item) => item.openTime + intervalMs <= signalBarClose);
+    const altHistory = altBtcCandles.filter((item) => item.openTime + intervalMs <= signalBarClose);
     const previousClose = candles[index - 1]?.close ?? candle.open;
+    const oiChangePercent = openInterestChangeForTime(openInterest, signalBarClose);
     const signal = buildAssetSignal({
       symbol: asset,
       name: asset,
       price: candle.close,
       candles: history,
-      fearGreed: valueForUtcDate(fearGreed, candle.openTime),
-      fundingPercent: fundingForTime(funding, candle.openTime),
+      fearGreed: valueForUtcDate(fearGreed, signalBarClose),
+      fundingPercent: fundingForTime(funding, signalBarClose),
+      oiChangePercent,
       priceChangePercent: ((candle.close - previousClose) / previousClose) * 100,
       ethBtcCurrent: asset === 'ETH' ? ethHistory.at(-1)?.close : undefined,
       ethBtcMa20: asset === 'ETH' ? averageRecentCloses(ethHistory) : undefined,
       altBtcCurrent: isAlt(asset) ? altHistory.at(-1)?.close : undefined,
       altBtcMa20: isAlt(asset) ? averageRecentCloses(altHistory) : undefined,
+      signalTimeframe: timeframe,
+      signalBarOpen: new Date(candle.openTime).toISOString(),
+      signalBarClose: new Date(signalBarClose).toISOString(),
     });
     scored.push({ candle, score: signal.overallScore, signal });
   }
@@ -72,6 +88,14 @@ function fundingForTime(rows: HistoricalFundingRow[], time: number): number | un
     if (rows[index].fundingTime <= time) return rows[index].fundingRatePercent;
   }
   return undefined;
+}
+
+function openInterestChangeForTime(rows: HistoricalOpenInterestRow[], time: number): number | undefined {
+  const available = rows.filter((row) => row.timestamp <= time).sort((left, right) => left.timestamp - right.timestamp);
+  if (available.length < 2) return undefined;
+  const previous = available.at(-2)!.openInterest;
+  const current = available.at(-1)!.openInterest;
+  return ((current - previous) / previous) * 100;
 }
 
 function valueForUtcDate(rows: HistoricalFearGreedRow[], time: number): number | undefined {

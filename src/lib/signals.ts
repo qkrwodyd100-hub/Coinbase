@@ -29,6 +29,24 @@ export type Signal = {
   tone: SignalTone;
 };
 
+export type CoverageRegime = 'full' | 'limited' | 'insufficient';
+export type SignalTimeframe = '1d' | '4h';
+export type SignalFeatureId = 'price' | 'moving-averages' | 'rsi' | 'mfi' | 'funding' | 'open-interest' | 'fear-greed' | 'eth-btc-strength' | 'alt-btc-strength';
+export type FeatureTimeframe = '1d' | '8h' | '4h';
+export type FeatureStatus = 'available' | 'missing' | 'stale';
+
+export type FeatureObservation = {
+  id: SignalFeatureId;
+  source: string;
+  timeframe: FeatureTimeframe;
+  observedAt: string | null;
+  availableAt: string | null;
+  maxAgeMs: number;
+  status: FeatureStatus;
+};
+
+export const EXTREME_SIGNAL_COVERAGE_FLOOR = 100;
+
 export type AssetSignal = {
   symbol: AssetSymbol;
   name: string;
@@ -39,6 +57,14 @@ export type AssetSignal = {
   indicators: IndicatorScore[];
   missingFeatures: string[];
   scorePolicy: string;
+  signalTimeframe: SignalTimeframe;
+  signalBarOpen: string;
+  signalBarClose: string;
+  availableWeight: number;
+  coverageRegime: CoverageRegime;
+  extremeEligible: boolean;
+  extremeCoverageFloor: number;
+  features: FeatureObservation[];
 };
 
 export type BacktestSummaryRow = {
@@ -67,6 +93,9 @@ export type BacktestReport = {
 
 export type DashboardPayload = {
   asOf: string;
+  signalTimeframe: SignalTimeframe;
+  signalBarClose: string;
+  nextExecutableAt: string;
   usdKrwRate: number | null;
   fxUnavailable: boolean;
   assets: AssetSignal[];
@@ -79,7 +108,7 @@ export type DashboardPayload = {
   };
 };
 
-const SCORE_POLICY = 'missing features are not converted to zero or full credit; available indicator weights are normalized to 100 and limitations are exposed.';
+const SCORE_POLICY = 'missing or stale features are not converted to zero or full credit; available indicator weights are normalized to 100, but extreme labels and events require fresh 100% coverage.';
 
 export function calculateMovingAverage(closes: number[], period: number): number {
   if (!Number.isInteger(period) || period <= 0) {
@@ -404,12 +433,12 @@ export function scoreAltBtcStrength(current: number, ma20: number): IndicatorSco
   return { id: 'alt-btc-strength', title: 'ALT/BTC 상대강도', value: `${current.toFixed(8)} / MA20 ${ma20.toFixed(8)}`, score, maxScore: 15, interpretation: 'ALT/BTC가 MA20보다 2% 이상 강하면 15점, 2% 이상 약하면 0점이며 중간 구간은 방향별 부분 점수입니다.' };
 }
 
-export function signalForScore(score: number): Signal {
-  if (score >= 80) return { label: '강력 매수', tone: 'positive' };
+export function signalForScore(score: number, extremeEligible = true): Signal {
+  if (score >= 80) return extremeEligible ? { label: '강력 매수', tone: 'positive' } : { label: '매수', tone: 'positive' };
   if (score >= 60) return { label: '매수', tone: 'positive' };
   if (score >= 41) return { label: '관망', tone: 'neutral' };
   if (score >= 21) return { label: '매도', tone: 'negative' };
-  return { label: '강력 매도', tone: 'negative' };
+  return extremeEligible ? { label: '강력 매도', tone: 'negative' } : { label: '매도', tone: 'negative' };
 }
 
 export function buildAssetSignal(input: {
@@ -428,6 +457,10 @@ export function buildAssetSignal(input: {
   altBtcMa20?: number;
   usdKrwRate?: number | null;
   stale?: boolean;
+  signalTimeframe?: SignalTimeframe;
+  signalBarOpen?: string;
+  signalBarClose?: string;
+  features?: FeatureObservation[];
 }): AssetSignal {
   const closes = input.candles?.map((candle) => candle.close) ?? input.closes;
   if (!closes) {
@@ -478,20 +511,38 @@ export function buildAssetSignal(input: {
       ? scoreEthBtcStrength(input.ethBtcCurrent, input.ethBtcMa20)
       : null;
   const altBtcIndicator = isAlt && input.altBtcCurrent !== undefined && input.altBtcMa20 !== undefined ? scoreAltBtcStrength(input.altBtcCurrent, input.altBtcMa20) : null;
+  if (input.symbol === 'ETH' && !ethBtcIndicator) missingFeatures.push('eth-btc-strength');
   if (isAlt && !altBtcIndicator) missingFeatures.push('alt-btc-strength');
   const altScore = altBtcIndicator ? clampScore(Math.round(((rawScore + altBtcIndicator.score) / (availableMaxScore + altBtcIndicator.maxScore)) * 100)) : baseScore;
   const overallScore = ethBtcIndicator ? clampScore(Math.round(baseScore * 0.95 + ethBtcIndicator.score * 0.05)) : isAlt ? altScore : baseScore;
+  const availableWeight = input.symbol === 'ETH'
+    ? roundWeight(availableMaxScore * 0.95 + (ethBtcIndicator ? 5 : 0))
+    : isAlt
+      ? availableMaxScore + (altBtcIndicator?.maxScore ?? 0)
+      : availableMaxScore;
+  const coverageRegime: CoverageRegime = availableWeight >= EXTREME_SIGNAL_COVERAGE_FLOOR ? 'full' : availableWeight >= 60 ? 'limited' : 'insufficient';
+  const stale = input.stale ?? input.features?.some((feature) => feature.status === 'stale') ?? false;
+  const signalBarClose = input.signalBarClose ?? new Date((input.candles?.at(-1)?.openTime ?? 0) + 24 * 60 * 60 * 1000).toISOString();
+  const extremeEligible = coverageRegime === 'full' && !stale;
 
   return {
     symbol: input.symbol,
     name: input.name,
     price: input.price,
     overallScore,
-    signal: signalForScore(overallScore),
-    stale: input.stale ?? false,
+    signal: signalForScore(overallScore, extremeEligible),
+    stale,
     indicators: ethBtcIndicator ? [...indicators, ethBtcIndicator] : altBtcIndicator ? [...indicators, altBtcIndicator] : indicators,
     missingFeatures,
     scorePolicy: SCORE_POLICY,
+    signalTimeframe: input.signalTimeframe ?? '1d',
+    signalBarOpen: input.signalBarOpen ?? new Date(new Date(signalBarClose).getTime() - 24 * 60 * 60 * 1000).toISOString(),
+    signalBarClose,
+    availableWeight,
+    coverageRegime,
+    extremeEligible,
+    extremeCoverageFloor: EXTREME_SIGNAL_COVERAGE_FLOOR,
+    features: input.features ?? [],
   };
 }
 
@@ -523,4 +574,8 @@ function typicalPrice(candle: MarketCandle): number {
 
 function clampScore(score: number): number {
   return Math.min(100, Math.max(0, score));
+}
+
+function roundWeight(weight: number): number {
+  return Math.round(weight * 100) / 100;
 }

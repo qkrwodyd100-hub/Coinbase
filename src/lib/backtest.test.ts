@@ -52,6 +52,19 @@ describe('backtest event aggregation', () => {
     expect(result.signals[1]).toMatchObject({ type: 'strong-sell', signalOpenTime: 16 * hour, entryOpenTime: 20 * hour, success: true });
   });
 
+  it('does not create an extreme replay event when the scored snapshot failed the coverage floor', () => {
+    const scored = Array.from({ length: 4 }, (_, index) => ({
+      candle: candle(index, 100 + index),
+      score: index === 0 ? 82 : 45,
+      extremeEligible: index !== 0,
+    }));
+
+    const result = runBacktest({ asset: 'BTC', interval: '4h', horizonMs: 8 * hour, scoredCandles: scored });
+
+    expect(result.signals).toEqual([]);
+    expect(result.excludedSignals).toBe(0);
+  });
+
   it('summarizes per asset and signal type with counts, hit rate, average close return, and excursion metrics', () => {
     const result = runBacktest({
       asset: 'ETH',
@@ -95,7 +108,7 @@ describe('backtest event aggregation', () => {
         averageMaxAdversePercent: -1.98,
       }),
     ]);
-    expect(summary.dataLimitations).toContain('missing indicators are explicitly excluded and available weights are normalized; full-data and limited-data results must be compared separately.');
+    expect(summary.dataLimitations).toContain('missing or stale indicators are explicitly excluded; extreme events fail closed unless the snapshot has fresh 100% coverage.');
   });
 
   it('does not inspect a candle that starts exactly at the end of the forward horizon', () => {

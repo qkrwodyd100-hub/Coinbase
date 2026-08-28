@@ -205,10 +205,10 @@ export default function Home() {
       <section className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-8">
         <header className="mb-6 flex flex-col gap-4 rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-black/30 backdrop-blur md:flex-row md:items-center md:justify-between">
           <div className="min-w-0">
-            <p className="text-sm font-medium uppercase tracking-[0.28em] text-cyan-200/80 sm:tracking-[0.32em]">실시간 시장 시그널</p>
+            <p className="text-sm font-medium uppercase tracking-[0.28em] text-cyan-200/80 sm:tracking-[0.32em]">일일 닫힌 봉 시장 시그널</p>
             <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-5xl">크립토 시그널 대시보드</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
-              점수는 MA20/MA50, RSI(14), MFI(14), Binance 선물 펀딩비·미체결약정, Alternative.me 공포·탐욕 지수를 종합합니다.
+              UTC 기준으로 완전히 닫힌 1일 봉에서 MA20/MA50, RSI(14), MFI(14), 선물 포지셔닝과 공포·탐욕 지수를 재현 가능하게 계산합니다.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -351,7 +351,7 @@ function DashboardContent({
         <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-5 text-sm leading-6 text-slate-300">
           <h2 className="font-bold text-slate-100">점수 산정 메모</h2>
           <p className="mt-2">
-            지표 결측은 0점이나 만점으로 숨기지 않고 사용 가능한 가중치만 100점으로 정규화합니다. ETH는 ETH/BTC, 알트코인은 ALT/BTC 상대강도를 함께 반영합니다.
+            지표 결측은 0점이나 만점으로 숨기지 않고 사용 가능한 가중치를 정규화합니다. 단, 100% coverage가 아니거나 stale이면 강력 매수·매도 판정과 이벤트는 fail-closed됩니다.
           </p>
         </div>
         <AlertSettings
@@ -370,10 +370,12 @@ function DashboardContent({
             <p className="text-sm uppercase tracking-[0.28em] text-slate-400">{selectedAsset.symbol}</p>
             <h2 className="mt-1 text-3xl font-black tracking-tight sm:text-4xl">{selectedAsset.name} 시그널</h2>
             <p className="mt-2 break-words text-2xl font-black leading-tight sm:text-3xl">{formatUsdWithKrw(selectedAsset.price, usdKrwRate)}</p>
-            {stale ? <p className="mt-2 text-sm font-semibold text-amber-200">오래된 데이터: 새로고침 실패 후 캐시된 스냅샷을 표시합니다.</p> : null}
+            {stale ? <p className="mt-2 text-sm font-semibold text-amber-200">오래된 데이터: 명시된 최대 허용 나이를 넘긴 feature 또는 캐시된 스냅샷이 포함되어 극단 판정을 차단합니다.</p> : null}
           </div>
           <ScoreGauge assetName={selectedAsset.name} score={selectedAsset.overallScore} tone={selectedAsset.signal.tone} label={selectedAsset.signal.label} />
         </div>
+
+        <SignalDataContract asset={selectedAsset} />
 
         <div className="mt-7 flex min-w-0 flex-col gap-3 border-t border-white/10 pt-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
@@ -430,6 +432,40 @@ function DashboardContent({
         <IndicatorDetailDialog asset={selectedAsset} indicator={selectedIndicator} contribution={selectedContribution} onClose={closeIndicatorDetail} />
       ) : null}
     </div>
+  );
+}
+
+function SignalDataContract({ asset }: { asset: AssetSignal }) {
+  if (!asset.signalBarClose || !asset.coverageRegime) return null;
+
+  return (
+    <section aria-label={`${asset.symbol} 시그널 데이터 계약`} className="mt-6 rounded-3xl border border-cyan-200/20 bg-cyan-200/[0.06] p-5 text-sm" role="region">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-bold text-cyan-50">신호 데이터 계약</h3>
+        <span className="rounded-full bg-cyan-200/10 px-3 py-1 font-bold text-cyan-100">{asset.signalTimeframe} 닫힌 봉</span>
+      </div>
+      <dl className="mt-4 grid gap-3 text-slate-300 sm:grid-cols-2">
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Signal bar</dt>
+          <dd className="mt-1 break-all">{asset.signalBarOpen} → {asset.signalBarClose}</dd>
+        </div>
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Coverage regime</dt>
+          <dd className="mt-1 font-bold text-slate-100">{asset.coverageRegime} · {asset.availableWeight}/{asset.extremeCoverageFloor}</dd>
+          <dd className="mt-1 text-xs">{asset.extremeEligible ? '극단 판정 가능' : '극단 판정 fail-closed'}</dd>
+        </div>
+      </dl>
+      {asset.features?.length ? (
+        <ul aria-label={`${asset.symbol} feature freshness`} className="mt-4 grid gap-2 sm:grid-cols-2">
+          {asset.features.map((feature) => (
+            <li key={feature.id} className="rounded-2xl border border-white/10 bg-black/20 p-3 text-xs text-slate-300">
+              <strong className="text-slate-100">{feature.id}</strong> · {feature.source} · {feature.timeframe} · {feature.status}
+              <span className="mt-1 block break-all">observed {feature.observedAt ?? 'missing'} · available {feature.availableAt ?? 'missing'} · max age {feature.maxAgeMs}ms</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
   );
 }
 
@@ -569,7 +605,7 @@ function UnavailableFuturesDataNotice({ missingFeatures }: { missingFeatures: As
   return (
     <section className="mt-4 rounded-2xl border border-amber-200/30 bg-amber-200/10 p-4 text-sm leading-6 text-amber-50" aria-label="선물 데이터 결측 안내">
       <h3 className="font-black">{fundingUnavailable ? '선물 펀딩비와 미체결약정 데이터를 가져오지 못했습니다.' : '미체결약정 데이터를 가져오지 못했습니다.'}</h3>
-      <p className="mt-1 text-amber-100">누락 지표는 0점이나 만점으로 처리하지 않고, 사용 가능한 지표만 100점 기준으로 정규화했습니다.</p>
+      <p className="mt-1 text-amber-100">진단 점수는 사용 가능한 지표를 정규화하지만, coverage가 100%가 아니므로 강력 판정과 이벤트는 차단됩니다.</p>
     </section>
   );
 }
@@ -627,7 +663,7 @@ function AlertSettings({
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h2 className="font-bold text-slate-100">극단 시그널 알람</h2>
-          <p className="mt-1 text-slate-300">80점 이상 재진입과 20점 이하 재진입을 자산·유형별로 감시하며 각각 6시간 cooldown을 적용합니다.</p>
+          <p className="mt-1 text-slate-300">fresh 100% coverage의 닫힌 봉에서만 80점 이상·20점 이하 재진입을 감시하며 자산·유형별 6시간 cooldown을 적용합니다.</p>
         </div>
         <button
           type="button"

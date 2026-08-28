@@ -36,7 +36,7 @@ const payload = {
     mode === 'public'
       ? [
           ...summary.dataLimitations,
-          'Historical open interest is unavailable in the public no-key backtest path, so futures positioning uses funding only (10 available points) and the available indicator weights are normalized to 100.',
+          'Historical open interest is unavailable in the public no-key backtest path, so coverage is limited and extreme replay events fail closed.',
         ]
       : summary.dataLimitations,
   source: mode === 'fixture' ? 'deterministic fixture' : 'Binance public spot no-key + Bybit public funding no-key + Alternative.me public no-key',
@@ -90,12 +90,13 @@ async function publicResults(smokeOnly: boolean) {
       ]);
       const scoredCandles = scoreBacktestCandles({
         asset,
+        timeframe: interval,
         candles,
         fearGreed: fng,
         funding,
         ethBtcCandles: ethBtc,
         altBtcCandles: altBtc,
-      }).map(({ candle, score }) => ({ candle, score }));
+      }).map(({ candle, score, signal }) => ({ candle, score, extremeEligible: signal.extremeEligible }));
       const result = runBacktest({ asset, interval, horizonMs: HORIZONS[interval], scoredCandles });
       allResults.push({ result, dataStart: candles[0]?.openTime ?? start, dataEnd: candles.at(-1)?.openTime ?? end, candleCount: candles.length });
     }
@@ -193,7 +194,7 @@ function writeMarkdown(path: string, payload: typeof summary & { source: string;
     .join('\n');
   return writeText(
     path,
-    `# Crypto signal backtest report\n\nGenerated: ${payload.generatedAt}\nSource: ${payload.source}\n\n## Methodology\n\n- Score weights with complete inputs: moving averages 25 + RSI 20 + MFI 20 + funding/open interest 20 + Fear & Greed 15 = 100.\n- ETH additionally blends the normalized base score at 95% with ETH/BTC 20-candle relative strength at 5%.\n- Missing indicators receive neither zero nor full credit; available weights are normalized to 100 and disclosed below.\n- Look-ahead rule: calculate the score after candle close, enter at the next candle open, evaluate only complete 24h (4h bars) or 7d (1d bars) horizons, and exclude the candle starting at the horizon boundary.\n- Hit rule: strong-buy succeeds on a +3% intrahorizon high; strong-sell succeeds on a -3% intrahorizon low.\n\n| Asset | Interval | Signal | Count | Hits | Hit rate | Avg close return |\n| --- | --- | --- | ---: | ---: | ---: | ---: |\n${rows}\n\n## Coverage\n\n| Asset | Interval | Horizon | Data start | Data end | Evaluated signals | Excluded signals |\n| --- | --- | --- | --- | --- | ---: | ---: |\n${coverage}\n\n## Data limitations\n\n${payload.dataLimitations.map((item) => `- ${item}`).join('\n')}\n`,
+    `# Crypto signal backtest report\n\nGenerated: ${payload.generatedAt}\nSource: ${payload.source}\n\n## Methodology\n\n- Score weights with complete inputs: moving averages 25 + RSI 20 + MFI 20 + funding/open interest 20 + Fear & Greed 15 = 100.\n- ETH additionally blends the normalized base score at 95% with ETH/BTC 20-candle relative strength at 5%.\n- Missing indicators receive neither zero nor full credit; diagnostic scores normalize available weights, while extreme replay events require fresh 100% coverage.\n- Look-ahead rule: calculate the score after candle close, enter at the next candle open, evaluate only complete 24h (4h bars) or 7d (1d bars) horizons, and exclude the candle starting at the horizon boundary.\n- Hit rule: strong-buy succeeds on a +3% intrahorizon high; strong-sell succeeds on a -3% intrahorizon low.\n\n| Asset | Interval | Signal | Count | Hits | Hit rate | Avg close return |\n| --- | --- | --- | ---: | ---: | ---: | ---: |\n${rows}\n\n## Coverage\n\n| Asset | Interval | Horizon | Data start | Data end | Evaluated signals | Excluded signals |\n| --- | --- | --- | --- | --- | ---: | ---: |\n${coverage}\n\n## Data limitations\n\n${payload.dataLimitations.map((item) => `- ${item}`).join('\n')}\n`,
   );
 }
 

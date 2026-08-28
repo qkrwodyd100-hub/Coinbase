@@ -273,4 +273,21 @@ describe('advanced asset signal contract', () => {
     expect(signal.indicators.map((indicator) => indicator.id)).toEqual(['moving-averages', 'rsi']);
     expect(signal.overallScore).toBe(44);
   });
+
+  it('fails closed instead of publishing an extreme label below the declared coverage floor', () => {
+    const signal = buildAssetSignal({
+      symbol: 'BTC',
+      name: '비트코인',
+      price: 1,
+      closes: Array.from({ length: 60 }, (_, index) => 100 + index),
+      fearGreed: 100,
+    });
+
+    expect(signal.overallScore).toBeLessThanOrEqual(20);
+    expect(signal.availableWeight).toBe(60);
+    expect(signal.coverageRegime).toBe('limited');
+    expect(signal.extremeEligible).toBe(false);
+    expect(signal.extremeCoverageFloor).toBe(100);
+    expect(signal.signal.label).toBe('매도');
+  });
 });
