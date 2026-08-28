@@ -9,6 +9,7 @@ import {
   type ExtremeSignalAlertState,
 } from '@/lib/alerts';
 import { ASSET_SYMBOLS, formatUsdWithKrw, type AssetSignal, type AssetSymbol, type DashboardPayload, type IndicatorId, type IndicatorScore, type SignalTone } from '@/lib/signals';
+import HoldingsPanel from '@/app/holdings-panel';
 
 type LoadState = 'loading' | 'refreshing' | 'success' | 'failure';
 
@@ -97,6 +98,7 @@ const INDICATOR_DETAILS: Record<IndicatorId, IndicatorDetailMetadata> = {
 };
 
 export default function Home() {
+  const [activeView, setActiveView] = useState<'market' | 'holdings'>('market');
   const [payload, setPayload] = useState<DashboardPayload | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<AssetSymbol>('BTC');
   const [loadState, setLoadState] = useState<LoadState>('loading');
@@ -228,22 +230,34 @@ export default function Home() {
           </div>
         </header>
 
-        {error ? (
+        <nav role="tablist" aria-label="대시보드 보기" onKeyDown={(event) => {
+          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+          event.preventDefault();
+          const nextView = activeView === 'market' ? 'holdings' : 'market';
+          setActiveView(nextView);
+          window.requestAnimationFrame(() => document.getElementById(`${nextView}-view-tab`)?.focus());
+        }} className="mb-6 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-slate-950/50 p-1">
+          <button id="market-view-tab" type="button" role="tab" aria-controls="market-view-panel" aria-selected={activeView === 'market'} tabIndex={activeView === 'market' ? 0 : -1} onClick={() => setActiveView('market')} className="min-h-11 rounded-xl px-4 text-sm font-black text-slate-200 aria-selected:bg-cyan-300 aria-selected:text-slate-950">시장 시그널</button>
+          <button id="holdings-view-tab" type="button" role="tab" aria-controls="holdings-view-panel" aria-selected={activeView === 'holdings'} tabIndex={activeView === 'holdings' ? 0 : -1} onClick={() => setActiveView('holdings')} className="min-h-11 rounded-xl px-4 text-sm font-black text-slate-200 aria-selected:bg-cyan-300 aria-selected:text-slate-950">내 보유자산</button>
+        </nav>
+
+        <div id="market-view-panel" role="tabpanel" aria-labelledby="market-view-tab" hidden={activeView !== 'market'} className="flex-1">
+        {activeView === 'market' && error ? (
           <div role="alert" className="mb-5 rounded-2xl border border-rose-400/40 bg-rose-500/10 p-4 text-sm text-rose-100">
             <strong>시그널을 새로고침하지 못했습니다.</strong> {hasStaleData ? '마지막으로 성공한 스냅샷을 표시합니다.' : '잠시 후 다시 시도해 주세요.'}
           </div>
         ) : null}
 
-        {payload?.fxUnavailable ? (
+        {activeView === 'market' && payload?.fxUnavailable ? (
           <p className="mb-5 rounded-2xl border border-amber-300/30 bg-amber-300/10 p-3 text-sm font-medium text-amber-100" role="status">
             원화 환산을 잠시 표시할 수 없습니다. USD 가격과 시그널은 계속 최신 데이터로 표시합니다.
           </p>
         ) : null}
 
-        {latestAlert ? <InAppAlert alert={latestAlert} /> : null}
+        {activeView === 'market' && latestAlert ? <InAppAlert alert={latestAlert} /> : null}
 
-        {!selectedAsset && loadState === 'loading' ? <DashboardSkeleton /> : null}
-        {selectedAsset ? (
+        {activeView === 'market' && !selectedAsset && loadState === 'loading' ? <DashboardSkeleton /> : null}
+        {activeView === 'market' && selectedAsset ? (
           <DashboardContent
             assets={payload?.assets ?? []}
             selectedAsset={selectedAsset}
@@ -259,6 +273,8 @@ export default function Home() {
             alertHistory={alertHistory}
           />
         ) : null}
+        </div>
+        {activeView === 'holdings' ? <div id="holdings-view-panel" role="tabpanel" aria-labelledby="holdings-view-tab" className="flex-1"><HoldingsPanel payload={payload} /></div> : null}
       </section>
     </main>
   );
