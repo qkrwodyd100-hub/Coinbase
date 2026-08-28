@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 
 const closedSignalContract = {
   signalTimeframe: '1d' as const,
@@ -450,3 +451,76 @@ test('manual refresh creates an in-app extreme signal alert and preserves mobile
   await expectNoHorizontalOverflow(page);
   await assertNoClientErrors();
 });
+
+test('local-only holdings survive reload, show live PnL evidence, export/import, and never enter network payloads', async ({ page }) => {
+  const assertNoClientErrors = expectNoClientErrors(page);
+  const privateMarkers = ['76543210', '0.123456', 'local-private-marker'];
+  const observedRequests: Array<{ url: string; body: string }> = [];
+  page.on('request', (request) => observedRequests.push({ url: request.url(), body: request.postData() ?? '' }));
+  await page.route('**/api/signals', (route) => route.fulfill({ json: payload }));
+  await page.goto('/');
+  await page.getByRole('tab', { name: '내 보유자산' }).click();
+
+  await page.getByLabel('평균매수가 KRW').fill('76543210');
+  await page.getByLabel('수량').fill('0.123456');
+  await page.getByLabel('최초 매수일').fill('2025-01-10');
+  await page.getByLabel('최근 매수일').fill('2026-01-10');
+  await page.getByLabel('목표매도기한').fill('2028-12-31');
+  await page.getByLabel('추가 투자 가능 금액 KRW').fill('1000000');
+  await page.getByLabel('메모').fill('local-private-marker');
+  await page.getByRole('button', { name: '보유자산 추가' }).click();
+
+  const card = page.getByRole('region', { name: 'BTC 보유자산 판단' });
+  await expect(card).toContainText('현재가');
+  await expect(card).toContainText('₩89,050,000');
+  await expect(card).toContainText('손익');
+  await expect(card).toContainText('비중축소 검토');
+  await expect(card).toContainText('시장 시그널');
+  await expect(card).toContainText('무효화 조건');
+  await expect(card).toContainText('confidence low');
+
+  await page.reload();
+  await page.getByRole('tab', { name: '내 보유자산' }).click();
+  await expect(page.getByRole('region', { name: 'BTC 보유자산 판단' })).toContainText('local-private-marker');
+  await page.getByRole('tab', { name: '시장 시그널' }).click();
+  await expect(page.getByRole('heading', { name: /비트코인 시그널/i })).toBeVisible();
+  await page.getByRole('tab', { name: '내 보유자산' }).click();
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: /CSV 내보내기/ }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('holdings.csv');
+  const downloadedPath = await download.path();
+  const exported = await readFile(downloadedPath!, 'utf8');
+  expect(exported).toContain('local-private-marker');
+  expect(exported).not.toMatch(/api[_-]?key|secret|token|environment/i);
+
+  await page.getByRole('button', { name: /모든 보유정보 삭제/ }).click();
+  await expect(page.getByText(/아직 등록한 보유자산이 없습니다/)).toBeVisible();
+  await page.getByLabel('JSON/CSV 파일 선택').setInputFiles({ name: 'holdings.csv', mimeType: 'text/csv', buffer: Buffer.from(exported) });
+  await expect(page.getByRole('region', { name: 'BTC 보유자산 판단' })).toContainText('local-private-marker');
+
+  for (const request of observedRequests) {
+    for (const marker of privateMarkers) expect(`${request.url}\n${request.body}`).not.toContain(marker);
+  }
+  await expectNoHorizontalOverflow(page);
+  await assertNoClientErrors();
+});
+
+for (const viewport of [{ width: 390, height: 844 }, { width: 430, height: 932 }]) {
+  test(`holdings remain keyboard-readable without overflow at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    const assertNoClientErrors = expectNoClientErrors(page);
+    await page.setViewportSize(viewport);
+    await page.route('**/api/signals', (route) => route.fulfill({ json: payload }));
+    await page.goto('/');
+    await page.getByRole('tab', { name: '내 보유자산' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: '내 보유자산' })).toBeVisible();
+    await page.getByLabel('평균매수가 KRW').fill('70000000');
+    await page.getByLabel('수량').fill('0.1');
+    await page.getByRole('button', { name: '보유자산 추가' }).click();
+    await expect(page.getByRole('region', { name: 'BTC 보유자산 판단' })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await assertNoClientErrors();
+  });
+}

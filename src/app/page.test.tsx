@@ -91,6 +91,27 @@ describe('dashboard behavior', () => {
     vi.unstubAllGlobals();
   });
 
+  it('switches between the market dashboard and the separate 내 보유자산 tab without losing market data', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => okPayload }));
+    render(createElement(Home));
+    await screen.findByRole('heading', { name: /비트코인 시그널/i });
+
+    const navigation = screen.getByRole('tablist', { name: '대시보드 보기' });
+    expect(within(navigation).getByRole('tab', { name: '시장 시그널' })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.click(within(navigation).getByRole('tab', { name: '내 보유자산' }));
+
+    expect(screen.getByRole('heading', { name: '내 보유자산' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /비트코인 시그널/i })).not.toBeInTheDocument();
+    await userEvent.click(within(navigation).getByRole('tab', { name: '시장 시그널' }));
+    expect(screen.getByRole('heading', { name: /비트코인 시그널/i })).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    within(navigation).getByRole('tab', { name: '시장 시그널' }).focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(within(navigation).getByRole('tab', { name: '내 보유자산' })).toHaveFocus();
+    expect(screen.getByRole('tabpanel', { name: '내 보유자산' })).toBeInTheDocument();
+  });
+
   it('renders Korean BTC data with computed KRW prices and lets users switch to ETH', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => okPayload }));
 
