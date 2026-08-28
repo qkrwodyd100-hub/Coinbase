@@ -20,6 +20,21 @@ All external calls are proxied through `GET /api/signals`, validated before scor
 - Strong-buy/strong-sell labels, alerts, and replay events fail closed unless coverage is fresh and exactly 100 points. A coverage/freshness transition re-baselines alert state and cannot emit a threshold event by itself.
 - Closed-input replay uses the same `buildAssetSignal` scorer as the API. Backtest entry remains the next candle open after the scored bar closes.
 
+## Durable Slack alerts
+
+Vercel calls the server-only `GET /api/cron/alerts` worker every ten minutes. The worker evaluates the canonical closed `1d` snapshot, establishes the first observation as a baseline, and creates an immutable PostgreSQL outbox event only for `<80 → >=80` strong-buy and `>20 → <=20` strong-sell crossings. The event identity is `(asset, type, signalBarClose)`, so duplicate snapshots cannot enqueue duplicate events; older snapshots cannot roll state backward. Coverage/freshness changes re-baseline without creating an event, and an asset/type cannot have two pending deliveries.
+
+Delivery is suppressed during Asia/Seoul 23:00-05:59 while events remain queued. At 06:00-22:59, workers claim due rows with a lease and `FOR UPDATE SKIP LOCKED`, then call Slack `chat.postMessage` with a deterministic `client_msg_id`. Acknowledged messages move to `sent` and only then update the asset/type `lastSentAt`. Failures retry after 1, 2, 4, and 8 minutes, stop after five persisted attempts, and survive process restarts. Messages include the asset, exact score crossing, closed-bar timeframe/close, feature freshness and coverage, a non-advice/no-execution caveat, and explicit invalidation. The application never executes trades.
+
+Required server-only environment variables:
+
+- `DATABASE_URL`: PostgreSQL connection string. The worker idempotently creates `alert_asset_state` and `alert_outbox`; use a restricted application role with schema/table access.
+- `SLACK_BOT_TOKEN`: Slack bot token with `chat:write`; keep it only in the deployment secret store.
+- `SLACK_CHANNEL_ID`: destination channel ID. Invite the bot to a private destination channel when applicable.
+- `CRON_SECRET`: high-entropy bearer secret used by Vercel Cron for the worker route.
+
+If any variable is missing, the cron route fails closed with `503` and does not expose configuration details. Unauthorized calls return `401`. Dashboard signal reads continue independently.
+
 Production backtests are regenerated with `npm run backtest` from public, no-key sources: Binance spot candles, Bybit linear funding history (`GET /v5/market/funding/history`), and Alternative.me Fear & Greed history. The verified snapshot is committed before deployment; `npm run build` validates freshness, provenance, and complete 8-asset × 2-interval coverage without making region-sensitive market calls. Both commands fail instead of publishing fixture, stale, malformed, or incomplete data.
 
 ## Moving-average mixed-case scoring
@@ -44,4 +59,4 @@ npm run test:e2e
 
 ## Vercel 공개 배포
 
-Canonical production URL은 [https://coinbase-ivory.vercel.app](https://coinbase-ivory.vercel.app)입니다. 공개 저장소 전환, Git integration 배포 복구, alias, build SHA, 환경변수 운영 절차는 [docs/vercel-public-release.md](docs/vercel-public-release.md)를 참고하세요. 현재 애플리케이션은 환경변수를 요구하지 않습니다.
+Canonical production URL은 [https://coinbase-ivory.vercel.app](https://coinbase-ivory.vercel.app)입니다. 공개 저장소 전환, Git integration 배포 복구, alias, build SHA, 환경변수 운영 절차는 [docs/vercel-public-release.md](docs/vercel-public-release.md)를 참고하세요. 대시보드 조회는 환경변수 없이 동작하지만 durable Slack worker는 위의 네 가지 server-only 변수를 요구합니다.

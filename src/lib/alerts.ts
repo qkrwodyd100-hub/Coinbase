@@ -9,7 +9,7 @@ export type ExtremeSignalAlertState = Partial<
     AssetSignal['symbol'],
     {
       previousScore: number;
-      lastSentAt: Partial<Record<ExtremeSignalAlertType, number>>;
+      lastTriggeredAt: Partial<Record<ExtremeSignalAlertType, number>>;
       coverageRegime?: CoverageRegime;
       extremeEligible?: boolean;
     }
@@ -44,24 +44,24 @@ export function evaluateExtremeSignalAlerts({
   for (const asset of assets) {
     const previousAssetState = previousState[asset.symbol];
     const previousScore = previousAssetState?.previousScore;
-    const lastSentAt = { ...(previousAssetState?.lastSentAt ?? {}) };
+    const lastTriggeredAt = { ...(previousAssetState?.lastTriggeredAt ?? {}) };
     const coverageChanged =
       (previousAssetState?.coverageRegime !== undefined && previousAssetState.coverageRegime !== asset.coverageRegime) ||
       (previousAssetState?.extremeEligible !== undefined && previousAssetState.extremeEligible !== asset.extremeEligible);
     const type = asset.extremeEligible && !coverageChanged ? alertTypeForCrossing(previousScore, asset.overallScore) : null;
 
     if (type) {
-      const lastSent = lastSentAt[type];
-      if (lastSent === undefined || now - lastSent >= ALERT_COOLDOWN_MS) {
+      const lastTriggered = lastTriggeredAt[type];
+      if (lastTriggered === undefined || now - lastTriggered >= ALERT_COOLDOWN_MS) {
         const message = buildExtremeSignalAlertMessage({ asset, type, score: asset.overallScore, createdAt: now });
         alerts.push({ ...message, assetSymbol: asset.symbol, type, score: asset.overallScore, createdAt: now });
-        lastSentAt[type] = now;
+        lastTriggeredAt[type] = now;
       }
     }
 
     nextState[asset.symbol] = {
       previousScore: asset.overallScore,
-      lastSentAt,
+      lastTriggeredAt,
       coverageRegime: asset.coverageRegime,
       extremeEligible: asset.extremeEligible,
     };
@@ -99,12 +99,18 @@ export function parseStoredAlertState(raw: string | null): ExtremeSignalAlertSta
     const state: ExtremeSignalAlertState = {};
     for (const symbol of ASSET_SYMBOLS) {
       const assetState = parsed[symbol];
-      if (!isRecord(assetState) || typeof assetState.previousScore !== 'number' || !isRecord(assetState.lastSentAt)) continue;
+      if (!isRecord(assetState) || typeof assetState.previousScore !== 'number') continue;
+      const persistedTriggers = isRecord(assetState.lastTriggeredAt)
+        ? assetState.lastTriggeredAt
+        : isRecord(assetState.lastSentAt)
+          ? assetState.lastSentAt
+          : null;
+      if (!persistedTriggers) continue;
 
-      const lastSentAt: Partial<Record<ExtremeSignalAlertType, number>> = {};
+      const lastTriggeredAt: Partial<Record<ExtremeSignalAlertType, number>> = {};
       for (const type of ['strong-buy', 'strong-sell'] as const) {
-        if (typeof assetState.lastSentAt[type] === 'number') {
-          lastSentAt[type] = assetState.lastSentAt[type];
+        if (typeof persistedTriggers[type] === 'number') {
+          lastTriggeredAt[type] = persistedTriggers[type];
         }
       }
 
@@ -112,7 +118,7 @@ export function parseStoredAlertState(raw: string | null): ExtremeSignalAlertSta
       const extremeEligible = assetState.extremeEligible;
       state[symbol] = {
         previousScore: assetState.previousScore,
-        lastSentAt,
+        lastTriggeredAt,
         ...(coverageRegime === 'full' || coverageRegime === 'limited' || coverageRegime === 'insufficient' ? { coverageRegime } : {}),
         ...(typeof extremeEligible === 'boolean' ? { extremeEligible } : {}),
       };

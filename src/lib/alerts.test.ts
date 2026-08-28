@@ -63,19 +63,19 @@ describe('extreme signal alert decisions', () => {
   it('keeps BTC and ETH cooldowns independent per alert type for 6 hours', () => {
     const sentAt = 10_000;
     const previousState: ExtremeSignalAlertState = {
-      BTC: { previousScore: 79, lastSentAt: { 'strong-buy': sentAt } },
-      ETH: { previousScore: 79, lastSentAt: {} },
+      BTC: { previousScore: 79, lastTriggeredAt: { 'strong-buy': sentAt } },
+      ETH: { previousScore: 79, lastTriggeredAt: {} },
     };
 
     const result = evaluateExtremeSignalAlerts({ assets: [asset('BTC', 82), asset('ETH', 82)], previousState, now: sentAt + ALERT_COOLDOWN_MS - 1 });
 
     expect(result.alerts.map((alert) => alert.assetSymbol)).toEqual(['ETH']);
     expect(result.nextState.BTC!.previousScore).toBe(82);
-    expect(result.nextState.ETH!.lastSentAt['strong-buy']).toBe(sentAt + ALERT_COOLDOWN_MS - 1);
+    expect(result.nextState.ETH!.lastTriggeredAt['strong-buy']).toBe(sentAt + ALERT_COOLDOWN_MS - 1);
   });
 
   it('requires a fresh re-entry after cooldown instead of repeating while the score stays extreme', () => {
-    const afterFirst = evaluateExtremeSignalAlerts({ assets: [asset('BTC', 80)], previousState: { BTC: { previousScore: 79, lastSentAt: {} } }, now: 1_000 });
+    const afterFirst = evaluateExtremeSignalAlerts({ assets: [asset('BTC', 80)], previousState: { BTC: { previousScore: 79, lastTriggeredAt: {} } }, now: 1_000 });
     const stillExtreme = evaluateExtremeSignalAlerts({ assets: [asset('BTC', 83)], previousState: afterFirst.nextState, now: 1_000 + ALERT_COOLDOWN_MS + 1 });
     const exited = evaluateExtremeSignalAlerts({ assets: [asset('BTC', 72)], previousState: stillExtreme.nextState, now: 1_000 + ALERT_COOLDOWN_MS + 61_000 });
     const reentered = evaluateExtremeSignalAlerts({ assets: [asset('BTC', 84)], previousState: exited.nextState, now: 1_000 + ALERT_COOLDOWN_MS + 121_000 });
@@ -134,7 +134,7 @@ describe('extreme signal alert decisions', () => {
 
   it('keeps opposite alert types independent for the same asset during cooldown', () => {
     const previousState: ExtremeSignalAlertState = {
-      BTC: { previousScore: 21, lastSentAt: { 'strong-buy': 10_000 } },
+      BTC: { previousScore: 21, lastTriggeredAt: { 'strong-buy': 10_000 } },
     };
 
     const result = evaluateExtremeSignalAlerts({ assets: [asset('BTC', 20)], previousState, now: 10_000 + ALERT_COOLDOWN_MS - 1 });
@@ -145,9 +145,9 @@ describe('extreme signal alert decisions', () => {
 
   it('preserves a six-hour cooldown for each altcoin and restores its persisted alert state', () => {
     const sentAt = 10_000;
-    const persisted = serializeAlertState({ SHIB: { previousScore: 79, lastSentAt: { 'strong-buy': sentAt } } });
+    const persisted = serializeAlertState({ SHIB: { previousScore: 79, lastTriggeredAt: { 'strong-buy': sentAt } } });
     const previousState = parseStoredAlertState(persisted);
-    expect(previousState).toEqual({ SHIB: { previousScore: 79, lastSentAt: { 'strong-buy': sentAt } } });
+    expect(previousState).toEqual({ SHIB: { previousScore: 79, lastTriggeredAt: { 'strong-buy': sentAt } } });
 
     const blocked = evaluateExtremeSignalAlerts({ assets: [asset('SHIB', 82)], previousState, now: sentAt + ALERT_COOLDOWN_MS - 1 });
     expect(blocked.alerts).toEqual([]);
@@ -162,8 +162,15 @@ describe('extreme signal alert decisions', () => {
     expect(parseStoredAlertState('{bad json')).toEqual({});
     expect(parseStoredAlertState('{"BTC":{"previousScore":"oops"}}')).toEqual({});
 
-    const state: ExtremeSignalAlertState = { BTC: { previousScore: 81, lastSentAt: { 'strong-buy': 1234 } } };
+    const state: ExtremeSignalAlertState = { BTC: { previousScore: 81, lastTriggeredAt: { 'strong-buy': 1234 } } };
     expect(parseStoredAlertState(serializeAlertState(state))).toEqual(state);
+  });
+
+  it('migrates the browser-only legacy lastSentAt name without serializing it as a Slack acknowledgement', () => {
+    const migrated = parseStoredAlertState('{"BTC":{"previousScore":79,"lastSentAt":{"strong-buy":1234}}}');
+
+    expect(migrated).toEqual({ BTC: { previousScore: 79, lastTriggeredAt: { 'strong-buy': 1234 } } });
+    expect(serializeAlertState(migrated)).not.toContain('lastSentAt');
   });
 
   it('builds Korean messages from the actual extreme indicators and score values', () => {

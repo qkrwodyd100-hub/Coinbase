@@ -21,6 +21,7 @@
   "dependencies": {
     "@tailwindcss/postcss": "latest",
     "next": "latest",
+    "pg": "^8.23.0",
     "react": "latest",
     "react-dom": "latest"
   },
@@ -31,11 +32,13 @@
     "@testing-library/react": "latest",
     "@testing-library/user-event": "latest",
     "@types/node": "latest",
+    "@types/pg": "^8.23.1",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "eslint": "latest",
     "eslint-config-next": "latest",
     "jsdom": "latest",
+    "pg-mem": "^3.0.14",
     "tailwindcss": "latest",
     "typescript": "latest",
     "vitest": "latest"
