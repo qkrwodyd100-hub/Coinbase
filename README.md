@@ -64,6 +64,10 @@ npm run build
 npm run test:e2e
 ```
 
+## Runtime (Node 22)
+
+컨테이너·테스트 런타임은 Node 22.x (검증 버전 v22.23.2, `.nvmrc` + `engines` 고정). Node 26에서는 jsdom `localStorage` 미지원으로 무관한 28건이 실패하고, Node 22에서는 해당 28건이 전부 통과함이 실측으로 확인됨.
+
 ## Vercel 공개 배포
 
 Canonical production URL은 [https://coinbase-ivory.vercel.app](https://coinbase-ivory.vercel.app)입니다. 공개 저장소 전환, Git integration 배포 복구, alias, build SHA, 환경변수 운영 절차는 [docs/vercel-public-release.md](docs/vercel-public-release.md)를 참고하세요. 대시보드 조회는 환경변수 없이 동작하지만 durable Slack worker는 위의 네 가지 server-only 변수를 요구합니다.

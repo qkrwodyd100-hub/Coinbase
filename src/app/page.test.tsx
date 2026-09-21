@@ -108,7 +108,7 @@ describe('dashboard behavior', () => {
 
     within(navigation).getByRole('tab', { name: '시장 시그널' }).focus();
     await userEvent.keyboard('{ArrowRight}');
-    expect(within(navigation).getByRole('tab', { name: '내 보유자산' })).toHaveFocus();
+    await waitFor(() => expect(within(navigation).getByRole('tab', { name: '내 보유자산' })).toHaveFocus());
     expect(screen.getByRole('tabpanel', { name: '내 보유자산' })).toBeInTheDocument();
   });
 
@@ -197,7 +197,7 @@ describe('dashboard behavior', () => {
     await userEvent.keyboard('{Escape}');
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(rsiCard).toHaveFocus();
+    await waitFor(() => expect(rsiCard).toHaveFocus());
   });
 
   it('opens indicator details with keyboard and resets stale detail content after switching assets', async () => {
